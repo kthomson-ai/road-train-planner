@@ -29,8 +29,8 @@ RR.alerts = (() => {
   }
   const severity = a => a.cat === 'closure' || a.cat === 'fire' ? 'red' : a.cat === 'flood' ? 'blue' : 'amber';
   const firstPoint = g => g.type === 'Point' ? g.coordinates : g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.type === 'MultiLineString' ? g.coordinates[0][Math.floor(g.coordinates[0].length / 2)] : null;
-  // Main Roads sometimes lists the same event in more than one feed: keep one per title + category
-  function live(items) { const seen = new Set(); return items.map(a => { const cat = classify(a); const x = { ...a, cat }; x.tone = severity(x); x.at = firstPoint(a.geom); return x; }).filter(a => { if (!a.at) return false; const k = a.cat + '|' + String(a.title).toLowerCase().trim(); if (seen.has(k)) return false; seen.add(k); return true; }); }
+  // Main Roads sometimes lists the same event in more than one feed: keep one per title + category + place (~1 km)
+  function live(items) { const seen = new Set(); return items.map(a => { const cat = classify(a); const x = { ...a, cat }; x.tone = severity(x); x.at = firstPoint(a.geom); return x; }).filter(a => { if (!a.at) return false; const k = a.cat + '|' + String(a.title).toLowerCase().trim() + '|' + a.at[0].toFixed(2) + ',' + a.at[1].toFixed(2); if (seen.has(k)) return false; seen.add(k); return true; }); }
 
   // rule-based items for the active vehicle (from Main Roads structures/bridges, permit conditions)
   function rules(profile, route) {
