@@ -5,10 +5,11 @@ RR.map = (() => {
   const tone = { red: '#F04444', amber: '#FFB020', blue: '#36A5F5', lime: '#B7F23D', grey: '#9AA6B2' };
   function init() {
     map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([-26.5, 121.5], 5);
-    base.dark = L.layerGroup([
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, maxNativeZoom: 16, attribution: 'Esri, HERE, Garmin, © OpenStreetMap contributors' }),
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20, maxNativeZoom: 16 })
-    ]).addTo(map);
+    const esri = n => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${n}/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 20, maxNativeZoom: 16, attribution: 'Esri, HERE, Garmin, © OpenStreetMap contributors' });
+    base.esriDark = L.layerGroup([esri('World_Dark_Gray_Base'), esri('World_Dark_Gray_Reference')]);
+    base.esriLight = L.layerGroup([esri('World_Light_Gray_Base'), esri('World_Light_Gray_Reference')]);
+    base.dark = isLight() ? base.esriLight : base.esriDark; base.dark.addTo(map);
+    RR.on('theme', retheme);
     ['net', 'zones', 'routes', 'alerts', 'facilities', 'wps', 'me'].forEach(k => L_[k] = L.layerGroup().addTo(map));
     L_.renderer = L.canvas({ padding: 0.4 });
     map.on('zoomend', () => RR.emit('zoom', map.getZoom()));
@@ -16,17 +17,28 @@ RR.map = (() => {
   }
   function addGoogle() {
     if (!L.gridLayer || !L.gridLayer.googleMutant || !window.google) return false;
-    base.google = L.gridLayer.googleMutant({ type: 'roadmap', maxZoom: 20, styles: DARK_STYLE });
+    base.google = L.gridLayer.googleMutant({ type: 'roadmap', maxZoom: 20, styles: isLight() ? LIGHT_STYLE : DARK_STYLE });
     base.sat = L.gridLayer.googleMutant({ type: 'hybrid', maxZoom: 20 });
     if (baseKey === 'dark') { map.removeLayer(base.dark); base.google.addTo(map); baseKey = 'google'; }
     return true;
   }
+  const isLight = () => document.documentElement.dataset.theme === 'light';
+  const LIGHT_STYLE = [{ featureType: 'poi', stylers: [{ visibility: 'off' }] }, { featureType: 'transit', stylers: [{ visibility: 'off' }] }, { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#f2c86b' }] }];
+  // swap map styling when the theme changes (satellite stays as is)
+  function retheme() {
+    if (!map) return;
+    const nextEsri = isLight() ? base.esriLight : base.esriDark;
+    if (baseKey === 'dark') { map.removeLayer(base.dark); nextEsri.addTo(map); }
+    base.dark = nextEsri;
+    if (base.google) { const on = baseKey === 'google'; if (on) map.removeLayer(base.google); base.google = L.gridLayer.googleMutant({ type: 'roadmap', maxZoom: 20, styles: isLight() ? LIGHT_STYLE : DARK_STYLE }); if (on) base.google.addTo(map); }
+  }
+  function setBase(k) { if (!base[k] || k === baseKey) return; map.removeLayer(base[baseKey]); base[k].addTo(map); baseKey = k; }
   const DARK_STYLE = [{ elementType: 'geometry', stylers: [{ color: '#151b21' }] }, { elementType: 'labels.text.fill', stylers: [{ color: '#9aa6b2' }] }, { elementType: 'labels.text.stroke', stylers: [{ color: '#101418' }] }, { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a333d' }] }, { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3b4652' }] }, { featureType: 'water', stylers: [{ color: '#0b1a26' }] }, { featureType: 'poi', stylers: [{ visibility: 'off' }] }, { featureType: 'transit', stylers: [{ visibility: 'off' }] }];
   function cycleBase() {
     const order = ['dark', ...(base.google ? ['google', 'sat'] : [])];
     const next = order[(order.indexOf(baseKey) + 1) % order.length];
     map.removeLayer(base[baseKey]); base[next].addTo(map); base[next].bringToBack && base[next].bringToBack(); if (base[next].eachLayer) base[next].eachLayer(l => l.bringToBack && l.bringToBack()); baseKey = next;
-    return { dark: 'Dark map (Esri)', google: 'Google map (dark)', sat: 'Satellite' }[next];
+    return { dark: 'Basic map (Esri)', google: 'Google map', sat: 'Satellite' }[next];
   }
   // ---- approved network ----
   function drawNetwork(data, show) {
@@ -51,10 +63,10 @@ RR.map = (() => {
   }
   const clearRoutes = () => L_.routes.clearLayers();
   // ---- markers ----
-  const dotIcon = (t, icon, size = 30) => L.divIcon({ className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2], html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#101418;border:2px solid ${tone[t] || t};color:${tone[t] || t};display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.6)">${RR.icon(icon, 'i').replace('class="i"', `style="width:${size * 0.55}px;height:${size * 0.55}px"`)}</div>` });
+  const dotIcon = (t, icon, size = 30, filled) => L.divIcon({ className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2], html: `<div style="width:${size}px;height:${size}px;border-radius:${filled ? '50% 50% 50% 4px' : '50%'};background:${filled ? (tone[t] || t) : '#101418'};border:2px solid ${filled ? '#fff' : (tone[t] || t)};color:${filled ? '#101418' : (tone[t] || t)};display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.6)">${RR.icon(icon, 'i').replace('class="i"', `style="width:${size * 0.55}px;height:${size * 0.55}px"`)}</div>` });
   function setAlerts(list, onClick) {
     L_.alerts.clearLayers();
-    list.forEach(a => { const cat = RR.alerts.CATS.find(c => c.key === a.cat) || {}; L.marker([a.at[1], a.at[0]], { icon: dotIcon(a.tone, cat.icon || 'alert', a.cat === 'height' ? 24 : 30), zIndexOffset: a.tone === 'red' ? 500 : 0 }).addTo(L_.alerts).bindTooltip(esc(a.title)).on('click', () => onClick && onClick(a)); });
+    list.forEach(a => { const cat = RR.alerts.CATS.find(c => c.key === a.cat) || {}; L.marker([a.at[1], a.at[0]], { icon: dotIcon(a.tone, a.icon || cat.icon || 'alert', a.cat === 'height' ? 24 : a.cat === 'report' ? 34 : 30, a.cat === 'report'), zIndexOffset: a.cat === 'report' ? 800 : a.tone === 'red' ? 500 : 0 }).addTo(L_.alerts).bindTooltip(esc(a.title)).on('click', () => onClick && onClick(a)); });
   }
   function setFacilities(list, onClick) {
     L_.facilities.clearLayers();
@@ -70,5 +82,5 @@ RR.map = (() => {
     else meMarker.setLatLng([lat, lon]);
   }
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  return { init, addGoogle, cycleBase, drawNetwork, drawZones, drawRoutes, clearRoutes, setAlerts, setFacilities, setWaypoints, setMe, get: () => map, layer: k => L_[k] };
+  return { init, addGoogle, cycleBase, setBase, baseKey: () => baseKey, hasGoogle: () => !!base.google, drawNetwork, drawZones, drawRoutes, clearRoutes, setAlerts, setFacilities, setWaypoints, setMe, get: () => map, layer: k => L_[k] };
 })();

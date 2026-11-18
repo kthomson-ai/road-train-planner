@@ -8,11 +8,15 @@ const NAV = (() => {
 
   // ---- speech ----
   let muted = false, voice = null;
-  function pickVoice() { try { const vs = speechSynthesis.getVoices(); voice = vs.find(v => /en-AU/i.test(v.lang)) || vs.find(v => /en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; } catch { } }
+  let prefURI = null, rate = 1;
+  try { const v = JSON.parse(localStorage.getItem('rr.voicePref') || 'null'); if (v) { prefURI = v.uri || null; rate = +v.rate || 1; } } catch { }
+  function pickVoice() { try { const vs = speechSynthesis.getVoices(); voice = (prefURI && vs.find(v => v.voiceURI === prefURI)) || vs.find(v => /en-AU/i.test(v.lang)) || vs.find(v => /en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; } catch { } }
+  function setVoice(uri, r) { prefURI = uri || null; if (r) rate = +r; try { localStorage.setItem('rr.voicePref', JSON.stringify({ uri: prefURI, rate })); } catch { } pickVoice(); }
   try { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; } catch { }
+  const lc1 = t => t.charAt(0).toLowerCase() + t.slice(1);
   function say(text, urgent) {
     if (muted || !('speechSynthesis' in window)) return;
-    try { if (urgent) speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); if (voice) u.voice = voice; u.lang = voice ? voice.lang : 'en-AU'; u.rate = 1; speechSynthesis.speak(u); } catch { }
+    try { if (urgent) speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); if (voice) u.voice = voice; u.lang = voice ? voice.lang : 'en-AU'; u.rate = rate; speechSynthesis.speak(u); } catch { }
   }
   const ABBR = [[/\bHwy\b/g, 'Highway'], [/\bGNH\b/g, 'Great Northern Highway'], [/\bRd\b/g, 'Road'], [/\bSt\b/g, 'Street'], [/\bDr\b/g, 'Drive'], [/\bAve?\b/g, 'Avenue'], [/\bPde\b/g, 'Parade'], [/\bTce\b/g, 'Terrace'], [/\bCres\b/g, 'Crescent'], [/\bPl\b/g, 'Place'], [/\bCt\b/g, 'Court'], [/\bBvd\b/g, 'Boulevard'], [/\bWy\b/g, 'Way'], [/\bRty\b/g, 'roundabout'], [/\bNth\b/g, 'North'], [/\bSth\b/g, 'South'], [/\bMt\b/g, 'Mount'], [/\s*\((North|South|East|West)bound\)/gi, ''], [/ - /g, ' ']];
   const speakName = n => { let s = n || 'the road'; for (const [re, r] of ABBR) s = s.replace(re, r); s = s.replace(/\boff to\b/i, 'exit to').replace(/\bon to\b/i, 'ramp to'); return s; };
@@ -48,6 +52,7 @@ const NAV = (() => {
   const fmtT = s => { const m = Math.round(s / 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'); };
 
   function onFix(lon, lat, acc, speed) {
+    try { RR.emit('navpos', [lon, lat]); } catch { }
     if (!active || !R) return;
     const pt = [lon, lat]; lastFix = { pt, acc, speed, t: Date.now() };
     posMarker.setLatLng([lat, lon]);
@@ -62,8 +67,8 @@ const NAV = (() => {
     if (next) {
       const dist = next.d - along;
       const far = Math.max(1500, v * 75), mid = Math.max(400, v * 22), now = Math.max(80, v * 6);
-      if (dist <= far && dist > mid * 1.3 && !next.said.far && dist > 1200) { next.said.far = 1; say(`${speakDist(dist)}, ${speakInstr(next.step).toLowerCase()}`); }
-      else if (dist <= mid && dist > now * 1.5 && !next.said.mid) { next.said.mid = 1; next.said.far = 1; say(`${speakDist(dist)}, ${speakInstr(next.step).toLowerCase()}`); }
+      if (dist <= far && dist > mid * 1.3 && !next.said.far && dist > 1200) { next.said.far = 1; say(`${speakDist(dist)}, ${lc1(speakInstr(next.step))}`); }
+      else if (dist <= mid && dist > now * 1.5 && !next.said.mid) { next.said.mid = 1; next.said.far = 1; say(`${speakDist(dist)}, ${lc1(speakInstr(next.step))}`); }
       else if (dist <= now && !next.said.now) {
         next.said.now = next.said.mid = next.said.far = 1;
         if (next.step.stop) { reachedStop = Math.max(reachedStop, next.step.stop); say(`You've reached stop ${next.step.stop}, ${speakName(next.step.name)}.`, true); flash(`Stop ${next.step.stop} reached: ${next.step.name}`); }
@@ -112,8 +117,8 @@ const NAV = (() => {
     box.bar.style.width = (100 * (1 - Math.min(dist, 1000) / 1000)).toFixed(0) + '%';
     box.label.textContent = m ? (m.step.stop ? 'Stop ' + m.step.stop : m.step.instr.replace(/ onto$/, '').replace(/^At the roundabout, /, 'Roundabout: ')) : 'Destination';
   }
-  const flagSvg = () => '<circle cx="0" cy="0" r="48" fill="#232D37"/><path d="M-10 30 V-30 M-10 -30 L22 -18 L-10 -6" stroke="#B7F23D" stroke-width="7" fill="none" stroke-linejoin="round" stroke-linecap="round"/>';
-  const stopSvg = n => `<circle cx="0" cy="0" r="48" fill="#232D37"/><path d="M0 34 C-4 18 -22 6 -22 -10 A22 22 0 0 1 22 -10 C22 6 4 18 0 34Z" fill="#FFB020"/><text x="0" y="-4" text-anchor="middle" font-size="22" font-weight="700" fill="#fff" font-family="system-ui">${n}</text>`;
+  const flagSvg = () => '<circle cx="0" cy="0" r="48" style="fill:var(--surface2)"/><path d="M-10 30 V-30 M-10 -30 L22 -18 L-10 -6" stroke="#B7F23D" stroke-width="7" fill="none" stroke-linejoin="round" stroke-linecap="round"/>';
+  const stopSvg = n => `<circle cx="0" cy="0" r="48" style="fill:var(--surface2)"/><path d="M0 34 C-4 18 -22 6 -22 -10 A22 22 0 0 1 22 -10 C22 6 4 18 0 34Z" fill="#FFB020"/><text x="0" y="-4" text-anchor="middle" font-size="22" font-weight="700" fill="#101418" font-family="system-ui">${n}</text>`;
   function junctionSvg(m) {
     const c = m.step.at || pointAt(m.d), cx = kx(c[1]);
     const back = pointAt(m.d - 40);
@@ -125,14 +130,14 @@ const NAV = (() => {
     const G = opts.graph && opts.graph();
     if (G) { // side roads at this junction
       let bj = -1, bd = 35; for (let j = 0; j < G.J.length; j++) { const v = G.coords[G.J[j]]; if (Math.abs(v[1] - c[1]) > 0.0005 || Math.abs(v[0] - c[0]) > 0.0006) continue; const d = hav(v, c); if (d < bd) { bd = d; bj = j; } }
-      if (bj >= 0) for (const dd of G.out[bj]) { const e = G.E[dd >> 1]; const p = (dd & 1) ? e.path.slice().reverse() : e.path; const pts = [G.coords[p[0]]]; let acc = 0; for (let k = 1; k < p.length && acc < 170; k++) { acc += hav(G.coords[p[k - 1]], G.coords[p[k]]); pts.push(G.coords[p[k]]); } side += `<path d="${path(pts)}" stroke="#3A4652" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`; }
+      if (bj >= 0) for (const dd of G.out[bj]) { const e = G.E[dd >> 1]; const p = (dd & 1) ? e.path.slice().reverse() : e.path; const pts = [G.coords[p[0]]]; let acc = 0; for (let k = 1; k < p.length && acc < 170; k++) { acc += hav(G.coords[p[k - 1]], G.coords[p[k]]); pts.push(G.coords[p[k]]); } side += `<path d="${path(pts)}" style="stroke:var(--line2)" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`; }
     }
     const inPts = slice(m.d - 170, m.d), outPts = slice(m.d, m.d + 120);
     const o = outPts.map(toXY); const a = o[o.length - 1], b = o[Math.max(0, o.length - 2)];
     const ang = Math.atan2(a[1] - b[1], a[0] - b[0]); const tip = [a[0] + 9 * Math.cos(ang), a[1] + 9 * Math.sin(ang)];
     const w1 = [a[0] + 11 * Math.cos(ang + 2.2), a[1] + 11 * Math.sin(ang + 2.2)], w2 = [a[0] + 11 * Math.cos(ang - 2.2), a[1] + 11 * Math.sin(ang - 2.2)];
     const full = path(inPts.concat(outPts.slice(1)));
-    return `<rect x="-70" y="-70" width="140" height="140" fill="#1C242C"/>${side}<path d="${full}" stroke="#101418" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${full}" stroke="#B7F23D" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polygon points="${[tip, w1, w2].map(p => p.map(v => v.toFixed(1)).join(',')).join(' ')}" fill="#B7F23D" stroke="#101418" stroke-width="2"/><circle cx="0" cy="${(170 * S * 0.9).toFixed(0)}" r="0"/>`;
+    return `<rect x="-70" y="-70" width="140" height="140" style="fill:var(--surface)"/>${side}<path d="${full}" stroke="#101418" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${full}" stroke="#B7F23D" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polygon points="${[tip, w1, w2].map(p => p.map(v => v.toFixed(1)).join(',')).join(' ')}" fill="#B7F23D" stroke="#101418" stroke-width="2"/><circle cx="0" cy="${(170 * S * 0.9).toFixed(0)}" r="0"/>`;
   }
 
   async function keepAwake() { try { if ('wakeLock' in navigator) { lock = await navigator.wakeLock.request('screen'); } } catch { } }
@@ -160,7 +165,7 @@ const NAV = (() => {
   function stop() { active = false; stopTracking(); try { speechSynthesis.cancel(); } catch { } try { lock && lock.release(); } catch { } lock = null; document.body.classList.remove('driving'); if (posMarker) map.removeLayer(posMarker); }
   function setMuted(m) { muted = m; if (m) try { speechSynthesis.cancel(); } catch { } }
   // test hook
-  return { start, stop, setMuted, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
+  return { start, stop, setMuted, setVoice, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
 })();
 
 // ---- voice input for address boxes ----

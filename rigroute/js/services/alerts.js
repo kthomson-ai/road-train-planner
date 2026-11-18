@@ -11,7 +11,8 @@ RR.alerts = (() => {
     { key: 'height', label: 'Height limits', icon: 'height', tone: 'amber' },
     { key: 'weight', label: 'Weight limits', icon: 'weight', tone: 'amber' },
     { key: 'oversize', label: 'Oversize rules', icon: 'wide', tone: 'blue' },
-    { key: 'roadtrain', label: 'Road train rules', icon: 'truck', tone: 'blue' }
+    { key: 'roadtrain', label: 'Road train rules', icon: 'truck', tone: 'blue' },
+    { key: 'report', label: 'Driver reports', icon: 'report', tone: 'amber' }
   ];
   // live Main Roads item -> category
   function classify(a) {

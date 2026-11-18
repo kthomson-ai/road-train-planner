@@ -1,6 +1,6 @@
 // RigRoute service worker: always checks the network first (bypassing the browser cache) so updates
 // arrive straight away; the last good copy still opens without signal. Live data is never cached here.
-const CACHE = 'rigroute-shell-v3';
+const CACHE = 'rigroute-shell-v4';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'img/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => Promise.all(SHELL.map(u => fetch(u, { cache: 'reload' }).then(r => r.ok && c.put(u, r))))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
