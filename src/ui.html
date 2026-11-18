@@ -3,98 +3,152 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WA Road Train Route Planner (prototype)</title>
+<title>WA Heavy Vehicle Route Planner</title>
+<meta name="theme-color" content="#0f3d2e">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.16.0/dist/Leaflet.GoogleMutant.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root { --ink:#1d2329; --muted:#5f6b76; --line:#d9dee3; --bg:#f4f6f8; --accent:#0b62d6; --warn:#b45309; --bad:#b91c1c; --ok:#15803d; }
+  :root { --ink:#17201c; --muted:#64706a; --line:#e2e7e4; --bg:#eef2f0; --panel:#fff; --brand:#0f3d2e; --brand2:#146c43; --accent:#0b62d6; --warn:#b45309; --warnbg:#fff8ef; --bad:#b91c1c; --badbg:#fff4f4; --ok:#15803d; --okbg:#effaf3; --r:14px; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
-  .app { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
-  aside { overflow-y: auto; background: #fff; border-right: 1px solid var(--line); padding: 14px 16px 24px; }
+  html, body { margin: 0; height: 100%; font: 15px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
+  .app { display: grid; grid-template-columns: 420px 1fr; height: 100%; }
+  aside { overflow-y: auto; background: var(--bg); border-right: 1px solid var(--line); padding: 0 14px 24px; }
   #map { height: 100%; }
-  h1 { font-size: 17px; margin: 0 0 2px; }
-  .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 12px; }
-  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .03em; }
-  select, input[type=text] { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
-  .row { display: flex; gap: 6px; }
-  .row input { flex: 1; }
-  button { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 10px; cursor: pointer; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; width: 100%; padding: 11px; margin-top: 12px; }
-  button:disabled { opacity: .55; cursor: default; }
-  button.small { font-size: 12.5px; padding: 5px 8px; }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
-  .choices { border: 1px solid var(--line); border-radius: 8px; margin-top: 4px; overflow: hidden; }
-  .choices div { padding: 7px 10px; font-size: 13px; cursor: pointer; border-top: 1px solid var(--line); }
+  /* brand header */
+  .brand { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; align-items: center; margin: 0 -14px 12px; padding: 14px 16px; background: var(--brand); color: #fff; }
+  .logo { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,.12); display: grid; place-items: center; flex: none; }
+  .title { font-weight: 800; font-size: 16px; letter-spacing: -.01em; }
+  .ver { font-size: 12px; opacity: .8; }
+  /* panels */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(16,24,20,.04); }
+  .panel h2 { margin: 0 0 10px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: flex; justify-content: space-between; align-items: center; }
+  label.f { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 5px; }
+  select, input[type=text], input[type=number] { width: 100%; height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fbfcfb; color: var(--ink); transition: border-color .15s, box-shadow .15s; }
+  select:focus, input:focus { outline: none; border-color: var(--brand2); box-shadow: 0 0 0 3px rgba(20,108,67,.15); background: #fff; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .dims { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+  .unit { position: relative; } .unit input { padding-right: 24px; } .unit::after { content: attr(data-u); position: absolute; right: 10px; top: 32px; font-size: 13px; color: var(--muted); pointer-events: none; }
+  button { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 12px; cursor: pointer; color: var(--ink); transition: background .15s, border-color .15s; }
+  button:hover { background: #f4f7f5; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.small { font-size: 13px; padding: 6px 10px; }
+  button.link { border: 0; background: none; color: var(--brand2); font-weight: 600; padding: 6px 4px; }
+  button.link:hover { background: none; text-decoration: underline; }
+  .ib { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; flex: none; color: var(--muted); }
+  .ib svg { width: 19px; height: 19px; }
+  .ib.on, .mic.on { background: #fde8e8; border-color: #f3b4b4; color: var(--bad); }
+  button.primary { width: 100%; height: 52px; background: var(--brand2); border-color: var(--brand2); color: #fff; font-weight: 700; font-size: 16px; border-radius: 12px; box-shadow: 0 2px 6px rgba(20,108,67,.25); }
+  button.primary:hover { background: #0f5b38; }
+  .row { display: flex; gap: 6px; } .row input { flex: 1; min-width: 0; }
+  /* trip timeline */
+  .wp { position: relative; padding-left: 26px; margin-bottom: 10px; }
+  .wp::before { content: ''; position: absolute; left: 7px; top: 34px; bottom: -14px; width: 2px; background: repeating-linear-gradient(var(--line) 0 4px, transparent 4px 8px); }
+  .wp.end::before { display: none; }
+  .dot { position: absolute; left: 0; top: 30px; width: 16px; height: 16px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line); }
+  .wp.start .dot { background: var(--ok); } .wp.end .dot { background: var(--bad); } .wp.stop .dot { background: #d97706; }
+  .wp .lbl { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .wp.stop .lbl { color: #b45309; }
+  .addrow { display: flex; gap: 6px; padding-left: 26px; margin: -2px 0 10px; }
+  .choices { border: 1px solid var(--line); border-radius: 10px; margin-top: 6px; overflow: hidden; background: #fff; box-shadow: 0 6px 18px rgba(16,24,20,.08); }
+  .choices div { padding: 9px 12px; font-size: 13.5px; cursor: pointer; border-top: 1px solid var(--line); }
   .choices div:first-child { border-top: 0; }
-  .choices div:hover { background: #eef4fd; }
-  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 14px; }
-  .big { font-size: 22px; font-weight: 700; }
-  .warn { background: #fff7ed; border-color: #fcd9b6; color: #7c2d12; }
-  .bad { background: #fef2f2; border-color: #fecaca; color: #7f1d1d; }
-  .sect { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 16px 0 6px; display: flex; justify-content: space-between; align-items: center; }
+  .choices div:hover { background: #f0f7f3; }
+  .pickrow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; font-size: 12.5px; padding: 5px 10px; }
+  .seg button.on { background: var(--brand); color: #fff; }
+  #result { scroll-margin-top: 80px; }
+  .status { font-size: 13px; color: var(--muted); margin: 10px 2px 0; min-height: 18px; }
+  /* permit badge */
+  .permit { margin-top: 12px; border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; }
+  .permit .pi { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; margin-top: 1px; }
+  .permit b { display: block; font-size: 14px; }
+  .permit.none { background: var(--okbg); color: #14532d; } .permit.none .pi { background: var(--ok); }
+  .permit.order { background: #eef5ff; color: #1e3a6b; } .permit.order .pi { background: var(--accent); }
+  .permit.req { background: var(--badbg); color: #7f1d1d; } .permit.req .pi { background: var(--bad); }
+  .permit ul { margin: 4px 0 0; padding-left: 18px; } .permit li { margin: 2px 0; }
+  /* results */
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-top: 12px; }
+  .warn { background: var(--warnbg); border-color: #f5dcbc; color: #6b2d0c; }
+  .bad { background: var(--badbg); border-color: #f7cccc; color: #7f1d1d; }
+  .sum { display: flex; flex-direction: column; gap: 10px; }
+  .big { font-size: 28px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: #eef2f0; color: #35423b; }
+  .drive { display: flex; gap: 8px; }
+  .drive button.go { flex: 1; height: 48px; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; font-size: 15.5px; border-radius: 12px; }
+  .drive button.go:hover { background: #0952b5; }
+  .drive button { height: 48px; border-radius: 12px; }
+  .alerts { list-style: none; margin: 0; padding: 0; }
+  .alerts li { display: flex; gap: 10px; padding: 9px 0; border-top: 1px solid rgba(0,0,0,.06); font-size: 13.5px; }
+  .alerts li:first-child { border-top: 0; padding-top: 0; }
+  .alerts .ai { flex: none; width: 20px; text-align: center; }
+  details.sec { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); margin-top: 12px; overflow: hidden; }
+  details.sec > summary { list-style: none; cursor: pointer; padding: 12px 14px; font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  details.sec > summary::-webkit-details-marker { display: none; }
+  details.sec > summary::after { content: ''; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .2s; }
+  details.sec[open] > summary::after { transform: rotate(-135deg); }
+  .count { font-size: 12px; font-weight: 700; background: #eef2f0; color: var(--muted); border-radius: 999px; padding: 1px 8px; }
+  .secbody { padding: 0 14px 12px; }
   ol.steps { list-style: none; padding: 0; margin: 0; }
-  ol.steps li { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; padding: 8px 4px; border-top: 1px solid var(--line); cursor: pointer; }
-  ol.steps li:hover { background: #f7f9fb; }
-  .arrow { font-size: 18px; text-align: center; }
-  .dist { color: var(--muted); font-size: 13px; white-space: nowrap; }
-  .cond { font-size: 13px; padding: 8px 10px; border-left: 3px solid var(--warn); background: #fffaf3; margin: 6px 0; border-radius: 0 6px 6px 0; cursor: pointer; }
-  .cond.hard { border-left-color: var(--bad); background: #fff5f5; }
-  .cond b { display: block; font-size: 12.5px; }
-  .toggles { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; margin-top: 10px; color: var(--muted); }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .seg button { border: 0; border-radius: 0; font-size: 12.5px; padding: 5px 9px; }
-  .seg button.on { background: var(--ink); color: #fff; }
-  .legend { font-size: 12px; color: var(--muted); display: flex; gap: 12px; margin-top: 6px; }
-  .sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
-  .foot { font-size: 11.5px; color: var(--muted); margin-top: 22px; border-top: 1px solid var(--line); padding-top: 10px; }
+  ol.steps li { display: grid; grid-template-columns: 30px 1fr auto; gap: 8px; align-items: center; padding: 9px 2px; border-top: 1px solid var(--line); cursor: pointer; font-size: 14px; }
+  ol.steps li:hover { background: #f6f9f7; }
+  .arrow { width: 28px; height: 28px; border-radius: 8px; background: #eef4ff; color: var(--accent); display: grid; place-items: center; font-size: 15px; font-weight: 700; }
+  .dist { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .cond { font-size: 13px; padding: 9px 11px; border-left: 3px solid var(--warn); background: var(--warnbg); margin: 8px 0 0; border-radius: 0 8px 8px 0; cursor: pointer; }
+  .cond.hard { border-left-color: var(--bad); background: var(--badbg); }
+  .cond b { display: block; font-size: 12.5px; margin-bottom: 2px; }
+  .legend { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
+  .sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+  .tog { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+  .tog input { width: 18px; height: 18px; accent-color: var(--brand2); }
+  .mapopts .row { justify-content: space-between; align-items: center; }
+  .foot { font-size: 11.5px; color: var(--muted); padding: 6px 4px 0; }
   .foot a { color: var(--muted); }
-  .dims { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px; }
-  .dims input { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
-  .stoprow { margin-top: 8px; }
-  .stoprow .lbl { font-size: 12px; font-weight: 600; color: #b45309; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
-  .stoprow .row button { padding: 8px 9px; }
-  .stopbtns { display: flex; gap: 6px; margin-top: 8px; }
-  #junc { display: none; }
+  /* stops (generated) */
+  .stoprow .row button { width: 36px; padding: 0; color: var(--muted); }
+  /* leaflet layer control polish */
+  .leaflet-control-layers { border-radius: 10px !important; border: 1px solid var(--line) !important; box-shadow: 0 2px 8px rgba(0,0,0,.12) !important; font: 13px Inter, system-ui, sans-serif; }
+  /* driving mode */
+  #navbar, #navbot, #flash, #junc { display: none; }
+  body.driving #navbar { display: grid; grid-template-columns: 64px 1fr; gap: 4px 12px; align-items: center; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: var(--brand); color: #fff; padding: calc(12px + env(safe-area-inset-top, 0)) 16px 12px; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+  #navbar .na { grid-row: span 2; font-size: 46px; text-align: center; line-height: 1; }
+  #navbar .nd { font-size: 30px; font-weight: 800; line-height: 1.05; }
+  #navbar .ni { font-size: 17px; opacity: .95; }
+  body.driving #flash { position: fixed; top: 112px; left: 10px; right: 10px; z-index: 1000; background: var(--warnbg); color: #6b2d0c; border: 1px solid #f5dcbc; border-radius: 12px; padding: 10px 12px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  body.driving #navbot { display: flex; gap: 8px; align-items: center; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; background: #fff; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0)); box-shadow: 0 -2px 10px rgba(0,0,0,.2); }
+  #navbot .eta { flex: 1; font-weight: 800; font-size: 17px; }
+  #navbot button { height: 44px; padding: 0 14px; font-size: 15px; }
+  #navbot .stop { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 700; }
   body.driving #junc { display: block; position: fixed; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0)); z-index: 1000; width: 168px; background: #fff; border-radius: 14px; box-shadow: 0 3px 14px rgba(0,0,0,.3); overflow: hidden; }
   #junc svg { display: block; width: 168px; height: 150px; }
   #junc .jl { font-size: 12px; color: var(--muted); padding: 6px 10px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #junc .jd { font-size: 26px; font-weight: 800; padding: 0 10px 6px; }
   #junc .jbar { height: 6px; background: #e5e9ed; }
-  #junc .jbar i { display: block; height: 100%; width: 0; background: #0b62d6; transition: width .4s; }
-  .mic { min-width: 42px; }
-  .mic.on { background: #fde2e2; border-color: #f5a3a3; }
-  .drive { display: flex; gap: 8px; margin-top: 10px; }
-  .drive button.go { flex: 1; background: #15803d; border-color: #15803d; color: #fff; font-weight: 700; padding: 12px; font-size: 16px; }
-  #navbar, #navbot, #flash { display: none; }
-  body.driving #navbar { display: grid; grid-template-columns: 64px 1fr; gap: 4px 12px; align-items: center; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: #0f3d2e; color: #fff; padding: 12px 16px calc(12px + env(safe-area-inset-top, 0)); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
-  #navbar .na { grid-row: span 2; font-size: 46px; text-align: center; line-height: 1; }
-  #navbar .nd { font-size: 30px; font-weight: 800; line-height: 1.05; }
-  #navbar .ni { font-size: 17px; opacity: .95; }
-  body.driving #flash { position: fixed; top: 112px; left: 10px; right: 10px; z-index: 1000; background: #fff7ed; color: #7c2d12; border: 1px solid #fcd9b6; border-radius: 10px; padding: 10px 12px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
-  body.driving #navbot { display: flex; gap: 8px; align-items: center; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; background: #fff; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0)); box-shadow: 0 -2px 10px rgba(0,0,0,.2); }
-  #navbot .eta { flex: 1; font-weight: 700; font-size: 17px; }
-  #navbot button { padding: 10px 12px; font-size: 15px; }
-  #navbot .stop { background: #b91c1c; border-color: #b91c1c; color: #fff; font-weight: 700; }
+  #junc .jbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
   body.driving .app { grid-template-columns: 1fr; }
   body.driving aside { display: none; }
   body.driving #map { height: 100vh; position: static; }
-  @media (max-width: 800px) {
-    .app { grid-template-columns: 1fr; grid-template-rows: auto 55vh; height: auto; }
-    aside { border-right: 0; order: 1; }
-    #map { order: 0; height: 55vh; position: sticky; top: 0; z-index: 1; }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 46vh auto; height: auto; }
+    #map { order: 0; height: 46vh; position: sticky; top: 0; z-index: 1; }
+    aside { order: 1; border-right: 0; border-radius: 18px 18px 0 0; margin-top: -18px; position: relative; z-index: 2; box-shadow: 0 -4px 16px rgba(0,0,0,.08); padding-top: 0; }
+    .brand { position: static; border-radius: 18px 18px 0 0; }
+    .dims { grid-template-columns: repeat(2, 1fr); }
   }
 </style>
 </head>
 <body>
 <div class="app">
   <aside>
-    <h1>WA Road Train Route Planner</h1>
-    <div class="sub">Prototype v0.6.3 (vehicle types, oversize rules, multi-stop, voice) · routes only on Main Roads WA approved RAV networks</div>
+    <header class="brand"><div class="logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><path d="M2 6h11v9H2zM13 9h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2" fill="#0f3d2e"/><circle cx="16.5" cy="17" r="2" fill="#0f3d2e"/></svg></div><div><div class="title">WA Heavy Vehicle Route Planner</div><div class="ver" id="ver">v0.7 · routes on Main Roads WA approved networks</div></div></header>
 
-    <label for="net">Vehicle / approved network</label>
+    <section class="panel">
+      <h2>Vehicle</h2>
+      <label class="f" for="net">Vehicle type / approved network</label>
     <select id="net">
       <optgroup label="General access">
         <option value="GEN">Rigid truck or semi up to 19 m (general access)</option>
@@ -123,29 +177,30 @@
         <option value="PLAT">Platform trailer relocation network</option>
       </optgroup>
     </select>
-    <div class="hint">Pick the network your RAV notice or permit approves you for.</div>
-    <div class="dims">
-      <div><label for="dimH">Height (m)</label><input id="dimH" type="number" step="0.01" min="0" inputmode="decimal"></div>
-      <div><label for="dimW">Width (m)</label><input id="dimW" type="number" step="0.01" min="0" inputmode="decimal"></div>
-      <div><label for="dimL">Length (m)</label><input id="dimL" type="number" step="0.1" min="0" inputmode="decimal"></div>
-    </div>
-    <div class="hint">Loaded height, width and length. Used to avoid low overpasses, freeways and the Perth/Fremantle Central Zones where the rules require it.</div>
+      <div class="hint">Pick the network your RAV notice or permit approves you for.</div>
+      <div class="dims">
+        <div class="unit" data-u="m"><label class="f" for="dimH">Height</label><input id="dimH" type="number" step="0.01" min="0" inputmode="decimal"></div>
+        <div class="unit" data-u="m"><label class="f" for="dimW">Width</label><input id="dimW" type="number" step="0.01" min="0" inputmode="decimal"></div>
+        <div class="unit" data-u="m"><label class="f" for="dimL">Length</label><input id="dimL" type="number" step="0.1" min="0" inputmode="decimal"></div>
+        <div class="unit" data-u="t"><label class="f" for="dimM">Mass</label><input id="dimM" type="number" step="0.5" min="0" inputmode="decimal" placeholder="opt."></div>
+      </div>
+      <div id="permitBadge"></div>
+    </section>
 
-    <label for="from">Start</label>
-    <div class="row"><input id="from" type="text" placeholder="Town, address or lat,lon"><button class="mic" data-mic="from" title="Say the start">🎤</button><button id="gps" title="Use my location">📍</button></div>
-    <div id="fromChoices"></div>
-
-    <div id="stops"></div>
-    <div class="stopbtns"><button class="small" id="addStop">+ Add stop</button><button class="small" id="optStops" style="display:none" title="Reorder the stops for the quickest legal run (start and destination stay put)">Optimise stop order</button></div>
-
-    <label for="to">Destination</label>
-    <div class="row"><input id="to" type="text" placeholder="Town, address or lat,lon"><button class="mic" data-mic="to" title="Say the destination">🎤</button></div>
-    <div id="toChoices"></div>
-
-    <div class="toggles">
-      <span>Tap map to set:</span>
-      <span class="seg"><button data-pick="from">Start</button><button data-pick="to">Destination</button><button data-pick="" class="on">Off</button></span>
-    </div>
+    <section class="panel">
+      <h2>Trip</h2>
+      <div class="wp start"><span class="dot"></span><div class="lbl">Start</div>
+        <div class="row"><input id="from" type="text" placeholder="Town, address or place" autocomplete="off"><button class="ib mic" data-mic="from" title="Say the start" aria-label="Say the start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button><button class="ib" id="gps" title="Use my location" aria-label="Use my location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button></div>
+        <div id="fromChoices"></div>
+      </div>
+      <div id="stops"></div>
+      <div class="addrow"><button class="link" id="addStop">+ Add stop</button><button class="link" id="optStops" style="display:none" title="Reorder the stops for the quickest legal run (start and destination stay put)">Optimise stop order</button></div>
+      <div class="wp end"><span class="dot"></span><div class="lbl">Destination</div>
+        <div class="row"><input id="to" type="text" placeholder="Town, address or place" autocomplete="off"><button class="ib mic" data-mic="to" title="Say the destination" aria-label="Say the destination"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button></div>
+        <div id="toChoices"></div>
+      </div>
+      <div class="pickrow">Tap map to set <span class="seg"><button data-pick="from">Start</button><button data-pick="to">Destination</button><button data-pick="" class="on">Off</button></span></div>
+    </section>
 
     <button id="go" class="primary" disabled>Loading network…</button>
     <div class="status" id="status"></div>
@@ -154,17 +209,17 @@
 
     <div id="result"></div>
 
-    <div class="toggles">
-      <label style="all:unset;cursor:pointer"><input type="checkbox" id="showNet" checked> Show approved network</label>
-      <button class="small" id="refresh">Refresh Main Roads data</button>
-    </div>
-    <div class="legend" style="flex-wrap:wrap"><span><i class="sw" style="background:#2e9d5b"></i>Approved</span><span><i class="sw" style="background:#e08a1e"></i>Approved with conditions</span><span><i class="sw" style="background:#0b62d6"></i>Route</span><span><b style="background:#1d2329;color:#fff;font-size:9px;padding:1px 3px;border-radius:3px">RTAA</b> Assembly area</span><span><i class="sw" style="background:#b91c1c"></i>Perth / Fremantle Central Zone</span></div>
+    <section class="panel mapopts" style="margin-top:12px">
+      <h2>Map</h2>
+      <div class="row"><label class="tog"><input type="checkbox" id="showNet" checked> Show approved network</label><button class="small" id="refresh">Refresh data</button></div>
+      <div class="legend"><span><i class="sw" style="background:#2e9d5b"></i>Approved</span><span><i class="sw" style="background:#e08a1e"></i>With conditions</span><span><i class="sw" style="background:#0b62d6"></i>Route</span><span><i class="sw" style="background:#b91c1c"></i>Central Zones</span><span><b style="background:#1d2329;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px">RTAA</b> Assembly area</span></div>
+    </section>
 
-    <div class="foot">
-      <b>Planning aid only.</b> Always check the official <a href="https://mrwebapps.mainroads.wa.gov.au/hvsnetworkmap" target="_blank" rel="noopener">Main Roads RAV Map</a>, your notice or permit, and current road conditions. Turn restrictions are read from text and may be missed. Roads off the approved network need road-owner approval.<br><br>
-      Network data: Main Roads Western Australia (CC BY 4.0), loaded live. Routing: this app, using Main Roads data (not Google). Map and address search: Google Maps, with Esri and OpenStreetMap Nominatim as backup.
+    <footer class="foot">
+      <b>Planning aid only.</b> Always check the official <a href="https://mrwebapps.mainroads.wa.gov.au/hvsnetworkmap" target="_blank" rel="noopener">Main Roads RAV Map</a>, your notice or permit, and current road conditions. Turn restrictions are read from text and may be missed; Central Zone outlines are approximate.<br><br>
+      Network, structure and road data: Main Roads Western Australia (CC BY 4.0), loaded live. Routing by this app (not Google). Map and address search: Google Maps, with Esri and OpenStreetMap as backup.
       <div id="dataInfo"></div>
-    </div>
+    </footer>
   </aside>
   <div id="map"></div>
 </div>
@@ -328,6 +383,7 @@ async function prepare(force) {
   if (!$('dimL').value || $('dimL').dataset.auto) { $('dimL').value = VEH[n][0]; $('dimL').dataset.auto = 1; }
   if (!$('dimW').value || $('dimW').dataset.auto) { $('dimW').value = VEH[n][1]; $('dimW').dataset.auto = 1; }
   if (!$('dimH').value) { $('dimH').value = 4.3; $('dimH').dataset.auto = 1; }
+  updatePermit();
   $('go').textContent = 'Loading network…'; routeLayer.clearLayers(); $('result').innerHTML = '';
   try {
     DATA = await loadNetwork(n, force);
@@ -414,8 +470,8 @@ function renumberStops() {
 }
 function addStop() {
   if (stopIds.length >= 8) return; const id = 's' + (++stopSeq); stopIds.push(id);
-  const row = document.createElement('div'); row.className = 'stoprow'; row.id = 'row-' + id;
-  row.innerHTML = `<div class="lbl"></div><div class="row"><input id="${id}" type="text" placeholder="Town, address or place"><button class="mic" data-mic="${id}" title="Say this stop">🎤</button><button data-up="${id}" title="Move up">↑</button><button data-down="${id}" title="Move down">↓</button><button data-del="${id}" title="Remove stop">✕</button></div><div id="${id}Choices"></div>`;
+  const row = document.createElement('div'); row.className = 'stoprow wp stop'; row.id = 'row-' + id;
+  row.innerHTML = `<span class="dot"></span><div class="lbl"></div><div class="row"><input id="${id}" type="text" placeholder="Town, address or place" autocomplete="off"><button class="ib mic" data-mic="${id}" title="Say this stop" aria-label="Say this stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button><button data-up="${id}" title="Move up" aria-label="Move up">↑</button><button data-down="${id}" title="Move down" aria-label="Move down">↓</button><button data-del="${id}" title="Remove stop" aria-label="Remove stop">✕</button></div><div id="${id}Choices"></div>`;
   $('stops').appendChild(row); wireInput(id); wireMic(row.querySelector('[data-mic]'));
   row.querySelector('[data-del]').onclick = () => { stopIds = stopIds.filter(x => x !== id); row.remove(); if (marks[id]) markLayer.removeLayer(marks[id]); delete marks[id]; delete P[id]; renumberStops(); };
   const move = d => { const i = stopIds.indexOf(id), j = i + d; if (j < 0 || j >= stopIds.length) return; [stopIds[i], stopIds[j]] = [stopIds[j], stopIds[i]]; stopIds.forEach(x => $('stops').appendChild($('row-' + x))); renumberStops(); };
@@ -478,7 +534,7 @@ map.on('click', e => { if (!pickMode) return; setPoint(pickMode, e.latlng.lng, e
 ['dimH', 'dimW', 'dimL'].forEach(id => $(id).addEventListener('input', () => { delete $(id).dataset.auto; RESTR = null; }));
 const zoneLayer = L.layerGroup().addTo(map);
 ZONES.forEach(z => L.polygon(z.poly.map(p => [p[1], p[0]]), { color: '#b91c1c', weight: 2, dashArray: '6 6', fillColor: '#b91c1c', fillOpacity: 0.06, interactive: true }).addTo(zoneLayer).bindTooltip(z.name + ' (approximate; see the Main Roads permit maps)'));
-const prof = () => ({ height: parseFloat($('dimH').value) || 0, width: parseFloat($('dimW').value) || 0, length: parseFloat($('dimL').value) || 0 });
+const prof = () => ({ height: parseFloat($('dimH').value) || 0, width: parseFloat($('dimW').value) || 0, length: parseFloat($('dimL').value) || 0, mass: parseFloat($('dimM').value) || 0 });
 // general access: add local streets around each point, then rebuild the graph
 async function graphFor(pts) {
   if (!DATA || !DATA.general) return GBASE;
@@ -524,67 +580,118 @@ $('go').onclick = async () => {
     render(r, performance.now() - t0);
   }, 10);
 };
+// ---- permit check (Main Roads: a vehicle over 2.5 m wide, 4.3 m high, 12.5 m rigid / 19 m combination, or 42.5 t is a RAV and needs a permit or order) ----
+const LIM = { width: 2.5, height: 4.3, length: 19, mass: 42.5 };
+function permitCheck(k, p) {
+  const over = [];
+  if (p.width > LIM.width) over.push(`${p.width} m wide (limit 2.5 m)`);
+  if (p.height > LIM.height) over.push(`${p.height} m high (limit 4.3 m)`);
+  if (p.mass > LIM.mass) over.push(`${p.mass} t gross (limit 42.5 t)`);
+  const lenOver = p.length > LIM.length;
+  const oversize = p.width > LIM.width || p.height > LIM.height;
+  const net = netName(k), maxLen = VEH[k] ? VEH[k][0] : 0;
+  const v = { level: 'none', title: '', items: [] };
+  if (k === 'GEN') {
+    if (lenOver) over.push(`${p.length} m long (limit 19 m for a combination, 12.5 m for a rigid truck)`);
+    if (!over.length) { v.title = 'No permit needed'; v.items.push('Within general access limits: 2.5 m wide, 4.3 m high, 19 m long (12.5 m for a rigid truck), 42.5 t.'); }
+    else { v.level = 'permit'; v.title = 'Permit required'; v.items.push('Over the general access limits: ' + over.join(', ') + '.', 'Pick the RAV network your vehicle runs under, or "Oversize load" for an over-dimension load.'); }
+    return v;
+  }
+  if (k === 'OSL') {
+    if (lenOver) over.push(`${p.length} m long (limit 19 m)`);
+    if (!over.length) { v.title = 'No permit needed for these dimensions'; v.items.push('Within general access limits. Enter the loaded dimensions to check.'); return v; }
+    v.level = 'permit'; v.title = 'Oversize permit required';
+    v.items.push('Over: ' + over.join(', ') + '.', 'Usually a Class 1 RAV Oversize Period Permit, or a Single Trip permit for larger loads, which sets the route you must take.');
+    if (p.width > 8.5 || p.length > 50) v.items.push('Over 8.5 m wide or 50 m long: an Oversize Overmass Transport Management Plan is also required.');
+    if (p.height > 4.3) v.items.push('Over 4.3 m high: written clearance confirmation from overhead cable owners is needed (up to 4.6 m is allowed on Tandem Drive Network 2 roads without it).');
+    return v;
+  }
+  if (/^TD/.test(k)) { v.level = 'order'; v.title = 'Main Roads order applies'; v.items.push(`A standard ${net} combination runs under the Main Roads Tandem Drive order and its operating conditions (no individual permit), on ${net} roads only.`); }
+  if (/^TRI/.test(k)) { v.level = 'permit'; v.title = 'Permit required'; v.items.push('Tri drive combinations run under a Tri Drive Period Permit from Main Roads.'); }
+  if (k === 'OSBD27') { v.level = 'permit'; v.title = 'Permit required'; v.items.push('Runs under an Oversize Road Train and B-Double Period Permit.'); }
+  if (k === 'PLAT') { v.level = 'permit'; v.title = 'Permit required'; v.items.push('Runs under a Platform Trailer Relocation Period Permit.'); }
+  if (maxLen && p.length > maxLen) { v.level = 'permit'; v.title = 'Permit required'; v.items.push(`${p.length} m is longer than ${net} allows (${maxLen} m): it needs a higher network or a specific permit.`); }
+  if (oversize && (k === 'OSBD27' || k === 'PLAT')) v.items.push('Over-width and over-height loads must stay within the limits in that permit.');
+  else if (oversize) { const o = over.filter(x => !/ t gross/.test(x)); v.level = 'permit'; v.title = /^TD/.test(k) ? 'Oversize permit required' : 'Permit required'; v.items.push('Load is over: ' + o.join(', ') + '. That needs an oversize permit on top of the ' + (/^TD/.test(k) ? 'order' : 'vehicle permit') + '.'); }
+  if (p.mass) v.items.push(`Mass limits for RAVs depend on the category and axle groups in your ${/^TD/.test(k) ? 'order' : 'permit'}, not the 42.5 t general limit.`);
+  return v;
+}
+function permitHtml(v) {
+  const icon = { none: '✓', order: 'i', permit: '!' }[v.level];
+  return `<div class="permit ${{ none: 'none', order: 'order', permit: 'req' }[v.level]}"><span class="pi">${icon}</span><div><b>${esc(v.title)}</b><ul>${v.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
+}
+function updatePermit() { const el = $('permitBadge'); if (!el || !curNet) return; el.innerHTML = permitHtml(permitCheck(curNet, prof())); }
+['dimH', 'dimW', 'dimL', 'dimM'].forEach(id => $(id).addEventListener('input', updatePermit));
+$('net').addEventListener('change', () => setTimeout(updatePermit, 0));
+
 function render(r, ms) {
   routeLayer.clearLayers(); const box = $('result'); box.innerHTML = '';
-  if (r.error) { box.innerHTML = `<div class="card bad">${esc(r.error)}<div class="hint">The points may be on parts of the network that don't connect for this vehicle, or the height/width/length rules block every way through. Check the dimensions, try a nearby town, or pick a higher category only if you're approved for it.</div></div>`; status(''); return; }
+  if (r.error) { box.innerHTML = `<div class="card bad"><b>No legal route found</b><div style="margin-top:4px">${esc(r.error)}</div><div class="hint">The points may be on parts of the network that don't connect for this vehicle, or the height, width and length rules block every way through. Check the dimensions, try a nearby town, or pick a higher category only if you're approved for it.</div></div>`; status(''); return; }
   const ll = r.line.map(c => [c[1], c[0]]);
   L.polyline(ll, { color: '#fff', weight: 9, opacity: 0.9 }).addTo(routeLayer);
   const pl = L.polyline(ll, { color: '#0b62d6', weight: 5 }).addTo(routeLayer);
-  const gaps = [];
+  const alerts = []; // [icon, html]
   const ends = [['from', r.s, 'start']];
   if (r.legs2 && RUN) r.legs2.slice(0, -1).forEach((lg, i) => ends.push([RUN.ids[i + 1], lg.t, 'stop ' + (i + 1)]));
   ends.push(['to', r.t, 'destination']);
   for (const [w, sn, nm] of ends) {
     if (sn && P[w] && sn.d > OFF_NET_M) {
       L.polyline([[P[w].lat, P[w].lon], [sn.pt[1], sn.pt[0]]], { color: '#b91c1c', weight: 4, dashArray: '6 8' }).addTo(routeLayer);
-      gaps.push(nm === 'start' ? `Your start is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The route begins where you join it.`
+      alerts.push(['⛔', nm === 'start' ? `Your start is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The route begins where you join it.`
         : nm === 'destination' ? `Your destination is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The approved route ends at the red dashed line; the last leg needs road-owner approval or a different vehicle.`
-        : `${nm[0].toUpperCase() + nm.slice(1)} is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The route reaches the nearest approved point; the run in needs road-owner approval or a different vehicle.`);
+        : `${nm[0].toUpperCase() + nm.slice(1)} is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The route reaches the nearest approved point; the run in needs road-owner approval or a different vehicle.`]);
     }
   }
   const bnd = pl.getBounds(); (RUN ? RUN.ids : ['from', 'to']).forEach(i => P[i] && bnd.extend([P[i].lat, P[i].lon])); map.fitBounds(bnd, { padding: [30, 30] });
-  const hard = r.conditions.filter(c => c.notThrough);
-  let h = `<div class="card"><div class="big">${fmtKm(r.total)} · ${fmtTime(r.secs)}</div><div class="hint">${DATA && DATA.general ? 'On public roads, avoiding Network 1 prohibited roads.' : 'On ' + netName(curNet) + ' approved roads only.'} Time is a rough guide (planning speeds by road type, no stops).</div></div>`;
-  h += `<div class="drive"><button class="go" id="startDrive">▶ Start driving</button><button id="demoDrive" title="Plays the route as if driving, so you can hear the directions">Demo drive</button></div>`;
-  if (gaps.length) h += `<div class="card warn">${gaps.join('<br><br>')}</div>`;
-  const pr = prof(), notes = (RESTR ? RESTR.notes : []).map(n => n.text), adv = advisories(r, pr);
+  const pr = prof();
+  (RESTR ? RESTR.notes : []).forEach(n => alerts.push([{ height: '↧', zone: '◪', fwy: '⛕', prohibited: '⛔' }[n.kind] || 'ℹ', esc(n.text)]));
   const tight = RAV.tightStructures(r.line, { structures: STRUCTS }, pr.height);
-  if (notes.length) h += `<div class="card">${notes.map(esc).join('<br>')}</div>`;
-  if (tight.length) h += `<div class="card warn"><b>Tight clearance on this route</b> (within 0.5 m of what your ${pr.height} m needs):<br>${tight.map(t => esc(`${t.maxH.toFixed(2)} m · ${t.descr} over ${t.road}${t.suburb ? ', ' + t.suburb : ''}`)).join('<br>')}</div>`;
-  if (adv.length) h += `<div class="card warn">${adv.map(esc).join('<br><br>')}</div>`;
+  if (tight.length) alerts.push(['⚠', `<b>Tight clearance</b> (within 0.5 m of what your ${pr.height} m needs): ${tight.map(t => esc(`${t.maxH.toFixed(2)} m, ${t.descr.toLowerCase()} over ${t.road}${t.suburb ? ', ' + t.suburb : ''}`)).join('; ')}`]);
+  advisories(r, pr).forEach(a => alerts.push(['⚠', esc(a)]));
+  if (r.rulesNear.length) alerts.push(['↱', `${r.rulesNear.length} intersection restriction${r.rulesNear.length > 1 ? 's' : ''} on or near the route. The route avoids the ones it could read; see the list below.`]);
   const nearAsm = p => RTAA.map(a => ({ ...a, d: RAV.hav([p.lon, p.lat], a.at) })).sort((x, y) => x.d - y.d)[0];
-  const asmNotes = [];
-  for (const [w, lbl] of [['from', 'start'], ['to', 'destination']]) { const a = nearAsm(P[w]); if (a && a.d < 60000) asmNotes.push(`Nearest road train assembly area to your ${lbl}: <b>${esc(a.name)}</b> (${esc(a.road || '')}, ${fmtKm(a.d)} away).`); }
-  if (asmNotes.length && /^(TD(6|7|8|9|10)|TRI[2-5])$/.test(curNet)) h += `<div class="card">${asmNotes.join('<br>')}<div class="hint">If you're coming in or out of Perth metro, the road train usually makes up or breaks down at one of these, so plan the road train leg from there.</div></div>`;
-  if (r.rulesNear.length) h += `<div class="card warn">${r.rulesNear.length} intersection restriction${r.rulesNear.length > 1 ? 's' : ''} on or near this route. The route avoids the ones it could read, but check the list below.</div>`;
-  h += `<div class="sect">Directions <button class="small" id="copy">Copy</button></div><ol class="steps">`;
+  if (/^(TD(6|7|8|9|10)|TRI[2-5])$/.test(curNet)) for (const [w, lbl] of [['from', 'start'], ['to', 'destination']]) { const a = nearAsm(P[w]); if (a && a.d < 60000) alerts.push(['⛟', `Nearest road train assembly area to your ${lbl}: <b>${esc(a.name)}</b> (${esc(a.road || '')}, ${fmtKm(a.d)} away).`]); }
+  const nStops = r.legs2 ? r.legs2.length - 1 : 0;
+  const chips = [netName(curNet), nStops ? `${nStops} stop${nStops > 1 ? 's' : ''}` : null, pr.height ? `${pr.height} m high` : null, pr.width ? `${pr.width} m wide` : null, pr.length ? `${pr.length} m long` : null, pr.mass ? `${pr.mass} t` : null].filter(Boolean);
+  let h = `<div class="card sum"><div><div class="big">${fmtKm(r.total)} · ${fmtTime(r.secs)}</div><div class="hint">${DATA && DATA.general ? 'On public roads, avoiding Network 1 prohibited roads.' : 'On ' + esc(netName(curNet)) + ' approved roads only.'} Time is a rough guide.</div></div>
+    <div class="chips">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div>
+    <div class="drive"><button class="go" id="startDrive">▶ Start driving</button><button id="demoDrive" title="Plays the route as if driving, so you can hear the directions">Demo drive</button></div></div>`;
+  h += `<div style="margin-top:12px">${permitHtml(permitCheck(curNet, pr))}</div>`;
+  if (alerts.length) h += `<div class="card ${alerts.some(a => a[0] === '⛔' || a[0] === '⚠') ? 'warn' : ''}"><ul class="alerts">${alerts.map(([i, t]) => `<li><span class="ai">${i}</span><span>${t}</span></li>`).join('')}</ul></div>`;
+  h += `<details class="sec" open><summary>Directions <span class="count">${r.steps.length}</span><button class="small" id="copy" style="margin-left:auto">Copy</button></summary><div class="secbody"><ol class="steps">`;
   r.steps.forEach((s, i) => { h += `<li data-i="${i}"><span class="arrow">${ARROW(s.instr)}</span><span>${esc(s.instr)} <b>${esc(s.name)}</b></span><span class="dist">${fmtKm(s.len)}</span></li>`; });
-  h += `<li><span class="arrow">⚑</span><span>Arrive at destination</span><span></span></li></ol>`;
+  h += `<li><span class="arrow">⚑</span><span>Arrive at destination</span><span></span></li></ol></div></details>`;
   if (r.conditions.length) {
-    h += `<div class="sect">Conditions on this route (${r.conditions.length})</div>`;
+    h += `<details class="sec"><summary>Road conditions on this route <span class="count">${r.conditions.length}</span></summary><div class="secbody">`;
     r.conditions.sort((a, b) => b.notThrough - a.notThrough).forEach((c, i) => { h += `<div class="cond ${c.notThrough ? 'hard' : ''}" data-c="${i}"><b>${esc(c.road)}</b>${esc(c.text)}</div>`; });
+    h += `</div></details>`;
   }
   if (r.rulesNear.length) {
-    h += `<div class="sect">Intersection restrictions near route</div>`;
+    h += `<details class="sec"><summary>Intersection restrictions <span class="count">${r.rulesNear.length}</span></summary><div class="secbody">`;
     r.rulesNear.forEach((x, i) => { h += `<div class="cond" data-r="${i}"><b>${esc(x.where || 'Intersection')}</b>${esc(x.text)}${x.parsed ? '' : ' <i>(not read automatically, check manually)</i>'}</div>`; });
+    h += `</div></details>`;
   }
   if (r.bridgesNear.length) {
-    h += `<div class="sect">Bridges listed for this network near route</div>`;
+    h += `<details class="sec"><summary>Listed bridges near route <span class="count">${r.bridgesNear.length}</span></summary><div class="secbody">`;
     r.bridgesNear.forEach(b => { h += `<div class="cond hard"><b>Bridge</b>${esc(Object.entries(b.props).filter(([k, v]) => v && !/OBJECTID|GlobalID/i.test(k)).map(([k, v]) => k + ': ' + RAV.stripHtml(String(v)).join(' ')).join(' · '))}</div>`; });
+    h += `</div></details>`;
   }
   box.innerHTML = h;
   box.querySelectorAll('li[data-i]').forEach(li => li.onclick = () => { const s = r.steps[+li.dataset.i]; map.setView([s.at[1], s.at[0]], 14); });
   const conds = r.conditions;
   box.querySelectorAll('[data-c]').forEach(el => el.onclick = () => { const c = conds[+el.dataset.c]; map.setView([c.at[1], c.at[0]], 13); });
   box.querySelectorAll('[data-r]').forEach(el => el.onclick = () => { const x = r.rulesNear[+el.dataset.r]; map.setView([x.at[1], x.at[0]], 16); });
-  $('copy').onclick = async () => {
-    const txt = [`${P.from.label} → ${P.to.label} (${netName(curNet)})`, `${fmtKm(r.total)}, ${fmtTime(r.secs)}`, ...r.steps.map((s, i) => `${i + 1}. ${s.instr} ${s.name} (${fmtKm(s.len)})`), 'Arrive', ...(conds.length ? ['', 'Conditions:', ...conds.map(c => `- ${c.road}: ${c.text}`)] : []), '', 'Planning aid only, check the Main Roads RAV Map.'].join('\n');
+  $('copy').onclick = async e => {
+    e.preventDefault(); e.stopPropagation();
+    const pv = permitCheck(curNet, pr);
+    const txt = [`${P.from.label} → ${P.to.label} (${netName(curNet)})`, `${fmtKm(r.total)}, ${fmtTime(r.secs)}`, `Permit: ${pv.title}`, ...r.steps.map((s, i) => `${i + 1}. ${s.instr} ${s.name} (${fmtKm(s.len)})`), 'Arrive', ...(conds.length ? ['', 'Conditions:', ...conds.map(c => `- ${c.road}: ${c.text}`)] : []), '', 'Planning aid only, check the Main Roads RAV Map.'].join('\n');
     try { await navigator.clipboard.writeText(txt); status('Directions copied.'); } catch { status('Copy not allowed here.'); }
   };
   LAST = r; window.__dbgLast = () => LAST;
   $('startDrive').onclick = () => drive(false);
   $('demoDrive').onclick = () => drive(true);
   status(NOTE || `Route found in ${(ms / 1000).toFixed(1)} s.`); NOTE = '';
+  if (window.innerWidth > 860) setTimeout(() => box.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
 }
 // ---- driving mode wiring ----
 let LAST = null, RUN = null, NOTE = '', follow = true;

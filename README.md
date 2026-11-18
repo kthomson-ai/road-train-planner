@@ -1,4 +1,4 @@
-# WA Road Train Route Planner (prototype)
+# WA Heavy Vehicle Route Planner (prototype)
 
 Plans routes for restricted access vehicles (road trains) using only roads on Main Roads WA's approved Tandem Drive RAV networks (Networks 6–10), with spoken turn-by-turn driving mode.
 
