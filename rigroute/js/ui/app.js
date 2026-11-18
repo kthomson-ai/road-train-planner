@@ -25,7 +25,7 @@
   RR.facIcon = f => f.kind === 'rtaa' ? 'truck' : f.kind === 'hvrest' ? 'parking' : f.kind === 'rest' ? 'rest' : f.kind === 'roadhouse' ? 'food' : (FAC.find(c => c.key === f.cat) || {}).icon || 'pin';
 
   // ---------- sheets & tabs ----------
-  const SHEETS = ['plan', 'route', 'alerts', 'stops', 'profile', 'vedit', 'layers', 'report', 'addstop'];
+  const SHEETS = ['plan', 'route', 'alerts', 'stops', 'profile', 'vedit', 'layers', 'report', 'addstop', 'feedback'];
   function openSheet(name) {
     SHEETS.forEach(n => $('sheet-' + n).classList.toggle('on', n === name));
     document.body.classList.toggle('sheet-open', !!name);
@@ -86,7 +86,7 @@
       if (force) { S.key = null; await RR.store.cachePut('net2-' + v.net, null); }
       await RR.routing.prepare(v.net, setPlanStatus);
       RR.map.drawNetwork(S.data, $('setNet').checked);
-      $('dataInfo').textContent = `${RR.net(v.net).short}: ${S.data.lines.length.toLocaleString()} road sections · ${S.structures.length} structures · ${app.alerts.length} live alerts`;
+      paintDataInfo();
       setPlanStatus('');
     } catch (e) { setPlanStatus('Couldn\'t reach Main Roads WA (' + e.message + '). Check your connection.'); }
     updateGo(); refreshAlertMarkers();
@@ -197,7 +197,7 @@
     $('go').disabled = true;
     const res = await RR.routing.plan({ pts: run.pts, labels: run.labels, profile: prof, prefs, onStatus: setPlanStatus });
     S.alerts = keepAlerts; $('go').disabled = false; setPlanStatus('');
-    app.RUN = run; app.PROF = prof; app.RES = res; app.sel = 0; app.vehId = RR.vehicles.active().id;
+    app.RUN = run; app.PROF = prof; app.PREFS = { ...prefs, closures: $('prefClosures').checked }; app.RES = res; app.sel = 0; app.vehId = RR.vehicles.active().id;
     if (res.error) { setPlanStatus(''); openSheet('route'); $('routeTitle').textContent = 'No legal route'; $('routeBody').innerHTML = `<div class="card" style="border-color:rgba(240,68,68,.4)"><b>No legal route found</b><p class="hint">${esc(res.error)}</p><p class="hint">The points may be on parts of the network that don't connect for this vehicle, or the height, width, length or closure rules block every way through. Check the vehicle and load, try a nearby place, or pick a higher network only if you're approved for it.</p></div>`; RR.map.clearRoutes(); return; }
     res.routes.forEach(r => r.conf.gaps.forEach(g => { const i = [r.s, ...(r.legs2 || []).slice(0, -1).map(l => l.t), r.t].indexOf(g); g.req = run.pts[i]; }));
     showRoute(0, true);
@@ -218,6 +218,7 @@
     res.routes.forEach((x, i) => { h += `<div class="ropt ${i === app.sel ? 'on' : ''}" data-r="${i}"><div class="t">${fmtT(x.trueSecs || x.secs)}</div><div class="d">${fmtKm(x.total)}</div><div class="lbl"><b>${esc(x.label)}</b>${(n => n ? `<span class="tag" style="color:var(--amber)">${n} alert${n > 1 ? 's' : ''}</span>` : '')(routeAlerts(x).length)}${x.conf.gaps.length ? '<span class="tag" style="color:var(--red)">Off-network leg</span>' : ''}</div>${confBar(x.conf)}</div>`; });
     h += `<div class="legend" style="margin:-2px 0 12px"><span><i class="sw" style="background:#B7F23D"></i>Confirmed access</span>${S.data.general ? '<span><i class="sw" style="background:#7FA83A"></i>General access street</span>' : ''}<span><i class="sw" style="background:#FFB020"></i>With conditions</span><span><i class="sw" style="background:#F04444"></i>Not verified</span></div>`;
     h += `<div class="drivebar" style="position:static;margin:0 0 12px;padding:0;background:none"><button class="btn primary big" id="startDrive" style="flex:1">${RR.icon('play')}Start</button><button class="btn big" id="demoDrive">Demo</button></div>`;
+    h += `<div class="dataage" id="routeAge"><i></i><span>Checking Main Roads data…</span></div>`;
     h += permitHtml(prof);
     // access basis
     const basis = p.level === 'permit' ? ['red', 'Permit-dependent access', 'This trip is only legal under the permit noted above, on the route it specifies.'] : S.data.general ? ['lime', 'General access roads', 'Uses public roads open to general access vehicles, avoiding the Network 1 prohibited list.'] : ['lime', `Confirmed on ${RR.net(prof.net).short}`, `Every section is on the Main Roads ${RR.net(prof.net).label} (with conditions where marked).`];
@@ -238,6 +239,7 @@
     h += `<details class="sec"><summary>${RR.icon('route')} Turn-by-turn <span class="count">${r.steps.length}</span><button class="iconbtn" id="copyDir" style="margin-left:auto;width:34px;height:34px" aria-label="Copy directions">${RR.icon('copy')}</button></summary><div class="in"><ul class="steps">${r.steps.map((s, k) => `<li data-st="${k}"><span class="ar">${ARROW(s.instr)}</span><span>${esc(s.instr)} <b>${esc(s.name)}</b></span><span class="km">${fmtKm(s.len)}</span></li>`).join('')}<li><span class="ar">⚑</span><span>Arrive</span><span></span></li></ul></div></details>`;
     if (r.conditions.length) h += `<details class="sec"><summary>${RR.icon('alert')} Road conditions <span class="count">${r.conditions.length}</span></summary><div class="in">${r.conditions.sort((a, b) => b.notThrough - a.notThrough).map((c, k) => `<div class="cond ${c.notThrough ? 'hard' : ''}" data-cd="${k}"><b>${esc(c.road)}</b>${esc(c.text)}</div>`).join('')}</div></details>`;
     if (r.rulesNear.length) h += `<details class="sec"><summary>${RR.icon('route')} Intersection restrictions <span class="count">${r.rulesNear.length}</span></summary><div class="in">${r.rulesNear.map((x, k) => `<div class="cond" data-rn="${k}"><b>${esc(x.where || 'Intersection')}</b>${esc(x.text)}${x.parsed ? '' : ' (check manually)'}</div>`).join('')}</div></details>`;
+    h += `<button class="link" id="routeFb" style="display:block;margin:0 0 6px">Something wrong with this route? Tell us</button>`;
     h += `<div class="hint" style="margin-bottom:8px">Times are planning estimates. Routes use Main Roads WA data loaded live; always follow signs and your notice or permit.</div>`;
     const body = $('routeBody'); body.innerHTML = h; body.scrollTop = 0;
     body.querySelectorAll('[data-r]').forEach(el => el.onclick = () => showRoute(+el.dataset.r));
@@ -247,6 +249,7 @@
     body.querySelectorAll('[data-fa]').forEach(el => el.onclick = () => fly(fac[+el.dataset.fa].at, 13));
     body.querySelectorAll('[data-cd]').forEach(el => el.onclick = () => fly(r.conditions[+el.dataset.cd].at, 13));
     body.querySelectorAll('[data-rn]').forEach(el => el.onclick = () => fly(r.rulesNear[+el.dataset.rn].at, 16));
+    paintDataAge($('routeAge')); $('routeFb').onclick = () => openFeedback('route');
     $('startDrive').onclick = () => drive(false); $('demoDrive').onclick = () => drive(true);
     $('copyDir').onclick = async e => { e.preventDefault(); e.stopPropagation(); const txt = [`RigRoute: ${app.RUN.labels.join(' → ')}`, `${prof.name} (${RR.net(prof.net).short}), ${fmtKm(r.total)}, ${fmtT(r.trueSecs || r.secs)}`, `Permit: ${p.title}`, ...r.steps.map((s, k) => `${k + 1}. ${s.instr} ${s.name} (${fmtKm(s.len)})`), 'Arrive'].join('\n'); try { await navigator.clipboard.writeText(txt); toast('Directions copied.'); } catch { toast('Copy isn\'t allowed here.'); } };
   }
@@ -269,7 +272,7 @@
     if (ok && !demo) toast('Driving mode on. Keep the screen open.');
   }
   RR.map.get && 0;
-  $('nStop').onclick = () => { NAV.stop(); setTimeout(() => { RR.map.get().invalidateSize(); showRoute(app.sel, true); }, 60); };
+  $('nStop').onclick = () => { NAV.stop(); $('closureBar').classList.remove('on'); if (app.pendingData) { app.pendingData = false; setTimeout(() => { loadNetwork(); toast('Main Roads data updated. Plan again to use the latest network.', 5000); }, 300); } setTimeout(() => { RR.map.get().invalidateSize(); showRoute(app.sel, true); }, 60); };
   $('nCentre').onclick = () => { follow = true; };
   let muted = false; $('nMute').onclick = () => { muted = !muted; NAV.setMuted(muted); $('nMute').textContent = muted ? '🔇' : '🔊'; };
 
@@ -423,9 +426,9 @@
   }
   async function sendReport(t, detail, side) {
     const pt = reportPoint();
-    const r = await RR.reports.add(t, pt.at, { note: detail || '', side });
+    let r; try { r = await RR.reports.add(t, pt.at, { note: detail || '', side }); } catch (e) { openSheet(null); return toast(`Couldn't send the report: ${e.message}`, 6000); }
     openSheet(null);
-    toastUndo(`${RR.reports.type(t).label} reported. Thanks!`, () => RR.reports.remove(r.id));
+    toastUndo(r.queued ? `${RR.reports.type(t).label} saved. It'll be shared when you have signal.` : `${RR.reports.type(t).label} reported. Thanks!`, () => RR.reports.remove(r.id));
   }
   function pickReport(t) {
     const T = RR.reports.type(t);
@@ -599,6 +602,111 @@
   $('repSay').onclick = () => voiceCommand('report');
   $('listening').onclick = () => showListening(false);
 
+
+  // ---------- keeping Main Roads data current ----------
+  const when = t => { const d = new Date(t), now = new Date(); const day = d.toDateString() === now.toDateString() ? 'today' : (now - d < 2 * 864e5 && new Date(now - 864e5).toDateString() === d.toDateString()) ? 'yesterday' : d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }); return `${day}, ${d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}`; };
+  async function paintDataAge(el) {
+    if (!el) return; const key = 'net2-' + (S.key || RR.vehicles.active().net);
+    const i = await RR.store.info(key); if (!i) { el.querySelector('span').textContent = 'Main Roads data downloaded just now.'; return; }
+    const stale = Date.now() - i.checked > 2 * 864e5;
+    el.classList.toggle('stale', stale);
+    el.querySelector('span').textContent = stale && i.failed ? `No signal: using Main Roads data from ${when(i.t)}.` : `Main Roads network checked ${when(i.checked)}${i.t < i.checked - 36e5 ? ` (unchanged since ${when(i.t).replace(/, .*/, '')})` : ''}.`;
+  }
+  async function paintDataInfo() {
+    const v = RR.vehicles.active(), i = await RR.store.info('net2-' + v.net);
+    $('dataInfo').textContent = S.data ? `${RR.net(v.net).short}: ${S.data.lines.length.toLocaleString()} road sections · ${S.structures.length} structures · ${(S.alerts || []).length} live alerts${i ? ` · checked ${when(i.checked)}` : ''}${app.liveAt ? ` · alerts ${when(app.liveAt)}` : ''}` : '';
+  }
+  RR.on('dataupdated', ({ key }) => {
+    if (key === 'net2-' + S.key) {
+      if (NAV.isActive()) { app.pendingData = true; return; } // never swap the network under a driver
+      S.key = null; loadNetwork(); toast('Main Roads updated the road network. The new version is now in use.', 5000);
+    } else if (key === 'structs1') RR.mainroads.structures().then(s => { S.structures = s; refreshAlertMarkers(); });
+    else if (/^fac1-/.test(key)) RR.mainroads.facilities().then(f => { S.facilities = f; });
+    paintDataInfo();
+  });
+  RR.on('datachecked', paintDataInfo);
+  // re-check every 6 hours for phones left open all day (each check is a few hundred bytes)
+  setInterval(() => { if (S.key) RR.mainroads.network(S.key).catch(() => { }); RR.mainroads.structures(); RR.mainroads.facilities(); }, 6 * 3600e3);
+
+  // ---------- new closures while driving ----------
+  const seenClosures = new Set();
+  function closuresAhead() {
+    const r = app.RES && app.RES.routes[app.sel]; if (!r || !NAV.isActive() || (app.PREFS && !app.PREFS.closures)) return [];
+    const near = alongIdx(r), here = navPos ? (near(navPos) ?? 0) : 0;
+    const L = r.line, st = Math.max(1, Math.floor(L.length / 3000)), cum = [0];
+    for (let i = 1; i < L.length; i++) cum.push(cum[i - 1] + RAV.hav(L[i - 1], L[i]));
+    const out = [];
+    for (const a of RR.routing.closuresBlocking()) {
+      const g = a.geom, lines = g.type === 'MultiLineString' ? g.coordinates : g.type === 'LineString' ? [g.coordinates] : [[g.coordinates]];
+      let hit = null;
+      for (const ln of lines) for (let j = 0; j < ln.length && !hit; j += Math.max(1, Math.floor(ln.length / 40))) for (let i = 0; i < L.length; i += st) { if (cum[i] > here && RAV.hav(ln[j], L[i]) < 60) { hit = cum[i] - here; break; } }
+      if (hit != null) out.push({ a, ahead: hit });
+    }
+    return out.sort((x, y) => x.ahead - y.ahead);
+  }
+  function checkClosures() {
+    const list = closuresAhead().filter(c => !seenClosures.has(c.a.id)); if (!list.length) return;
+    const c = list[0]; list.forEach(x => seenClosures.add(x.a.id));
+    $('cbTitle').textContent = `Road closed ahead: ${c.a.road || c.a.title}`;
+    $('cbSub').textContent = `${fmtKm(c.ahead)} ahead · ${c.a.impact || c.a.status || 'Main Roads live'}`;
+    $('closureBar').classList.add('on');
+    NAV._say(`Road closure ahead on ${c.a.road || 'your route'}, in ${c.ahead < 950 ? Math.round(c.ahead / 100) * 100 + ' metres' : Math.round(c.ahead / 1000) + ' kilometres'}. Tap reroute to avoid it.`, true);
+  }
+  app.checkClosures = checkClosures;
+  $('cbDismiss').onclick = () => $('closureBar').classList.remove('on');
+  $('cbReroute').onclick = () => {
+    $('closureBar').classList.remove('on');
+    const h = hereOnRoute(); if (!h) return;
+    const run = app.RUN, done = app.reached || 0;
+    const pts = [h.pos, ...run.pts.slice(1 + done)], labels = ['Current position', ...run.labels.slice(1 + done)];
+    const G = S.data.general ? S.local.g || S.base : S.base;
+    RR.routing.restrictions(G, app.PROF, pts, app.PREFS || {});
+    const nr = RR.routing.reroute(G, pts, labels, 1);
+    if (!nr || nr.error) { NAV._say('I couldn\'t find a legal way around the closure for this vehicle. Check the detour signs.', true); return toast('No legal detour found for this vehicle. Follow the signed detour and check your permit.', 7000); }
+    const old = app.RES.routes[app.sel];
+    Object.assign(nr, { conf: old.conf, tight: old.tight, zones: old.zones, metro: old.metro, label: old.label }); nr.along = RR.routing.alongRoute(nr);
+    app.RUN = { ids: [], pts, labels }; app.RES.routes[app.sel] = nr;
+    NAV.stop(); drive(app.demo);
+    NAV._say(`New route avoids the closure. ${fmtKm(nr.total).replace('km', 'kilometres')} to go.`, true);
+  };
+
+
+  // ---------- tester feedback ----------
+  const FB_KINDS = [['route', 'Wrong or illegal route'], ['turn', 'Bad turn / directions'], ['stop', 'Truck stop info'], ['alert', 'Alert wrong / missing'], ['app', 'App problem'], ['other', 'Other']];
+  let fbKind = 'route';
+  function fbContext() {
+    const r = app.RES && !app.RES.error ? app.RES.routes[app.sel] : null, v = app.PROF || RR.vehicles.active();
+    const pos = navPos || (app.ME ? [app.ME.lon, app.ME.lat] : null);
+    return {
+      version: RR.config.appVersion, when: new Date().toISOString(), driving: NAV.isActive(), theme: RR.theme.current(),
+      vehicle: { name: v.name, type: v.type, net: v.net, h: v.height, w: v.width, l: v.length, gcm: v.gcm || v.gvm || null, dg: !!v.dg },
+      trip: app.RUN ? app.RUN.labels : null,
+      route: r ? { km: Math.round(r.total / 100) / 10, mins: Math.round((r.trueSecs || r.secs) / 60), label: r.label, roads: [...new Set(r.steps.map(s => s.name))].slice(0, 40), gaps: r.conf.gaps.length } : null,
+      position: pos ? pos.map(x => +x.toFixed(5)) : null, map: (c => [+c.lng.toFixed(4), +c.lat.toFixed(4), RR.map.get().getZoom()])(RR.map.get().getCenter()),
+      ua: navigator.userAgent.slice(0, 160)
+    };
+  }
+  function openFeedback(kind) {
+    fbKind = kind || fbKind;
+    $('fbKinds').innerHTML = FB_KINDS.map(([k, l]) => `<button class="chip ${k === fbKind ? 'on' : ''}" data-k="${k}">${l}</button>`).join('');
+    $('fbKinds').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { fbKind = b.dataset.k; openFeedback(); });
+    const c = fbContext();
+    $('fbCtx').textContent = `Sent with it: your vehicle (${c.vehicle.name}), ${c.route ? 'the route you\'re on (' + c.route.km + ' km), ' : ''}${c.position ? 'your location, ' : 'the map position, '}and the app version, so we can see exactly what you saw.`;
+    if (app.sheet !== 'feedback') openSheet('feedback');
+  }
+  $('fbOpen').onclick = () => openFeedback('app');
+  $('repFb').onclick = () => openFeedback(NAV.isActive() ? 'route' : 'app');
+  $('fbMic').onclick = () => VOICE.supported ? VOICE.listen(t => { $('fbMsg').value = ($('fbMsg').value ? $('fbMsg').value + ' ' : '') + t; }, (st, err) => { if (st === 'listening') toast('Listening…'); if (st === 'error') toast(err === 'not-allowed' ? 'Microphone access is blocked.' : 'Didn\'t catch that.'); }) : toast('Voice input isn\'t available in this browser.');
+  $('fbSend').onclick = async () => {
+    const msg = $('fbMsg').value.trim(); if (!msg) { $('fbMsg').focus(); return toast('Add a few words about what happened.'); }
+    const c = fbContext(); $('fbSend').disabled = true;
+    try { await RR.reports.feedback({ kind: fbKind, message: msg, lon: c.position ? c.position[0] : c.map[0], lat: c.position ? c.position[1] : c.map[1], context: c }); $('fbMsg').value = ''; openSheet(null); toast('Thanks! Feedback sent.'); }
+    catch (e) { const q = RR.store.get('fbQueue', []); q.push({ kind: fbKind, message: msg, context: c }); RR.store.set('fbQueue', q.slice(-20)); openSheet(null); toast('No connection. Feedback saved and will send later.'); }
+    finally { $('fbSend').disabled = false; }
+  };
+  async function flushFeedback() { const q = RR.store.get('fbQueue', []); if (!q.length) return; const left = []; for (const f of q) { try { await RR.reports.feedback({ kind: f.kind, message: f.message, context: f.context, lon: f.context.position ? f.context.position[0] : f.context.map[0], lat: f.context.position ? f.context.position[1] : f.context.map[1] }); } catch { left.push(f); } } RR.store.set('fbQueue', left); }
+  setInterval(flushFeedback, 120e3); setTimeout(flushFeedback, 8000);
+
   // ---------- profiles ----------
   function renderProfiles() {
     const act = RR.vehicles.active();
@@ -632,7 +740,7 @@
   // ---------- live data ----------
   async function loadLive(force) {
     try { S.alerts = await RR.mainroads.liveAlerts(); app.liveAt = new Date(); } catch { S.alerts = S.alerts || []; }
-    refreshAlertMarkers(); if (app.sheet === 'alerts') renderAlerts();
+    refreshAlertMarkers(); if (app.sheet === 'alerts') renderAlerts(); checkClosures(); paintDataInfo();
   }
 
   // ---------- boot ----------

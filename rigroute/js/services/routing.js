@@ -111,5 +111,5 @@ RR.routing = (() => {
     return { routes, restr, G, ms };
   }
   function reroute(G, pts, labels, firstStopNo) { const r = state.restr; return RAV.routeVia(G, pts, labels, firstStopNo, { blocked: r && r.blocked, slow: r && r.slow, pen: r && r.pen }); }
-  return { state, prepare, plan, reroute, alongRoute, closuresBlocking };
+  return { state, prepare, plan, reroute, alongRoute, closuresBlocking, restrictions };
 })();

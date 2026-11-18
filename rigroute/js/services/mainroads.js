@@ -17,12 +17,26 @@ RR.mainroads = (() => {
     }
     return out;
   }
+  // tiny change signature for a set of layers: record count + last edit date (where the server publishes it)
+  async function layerSig(base, ids) {
+    const parts = await Promise.all(ids.map(async id => {
+      const [cnt, meta] = await Promise.all([
+        fetch(`${base}${id}/query?where=1%3D1&returnCountOnly=true&f=json`).then(r => r.json()),
+        fetch(`${base}${id}?f=json`).then(r => r.json()).catch(() => ({}))
+      ]);
+      if (cnt.error) throw new Error('sig');
+      return `${id}:${cnt.count}:${(meta.editingInfo && (meta.editingInfo.lastEditDate || meta.editingInfo.dataLastEditDate)) || ''}`;
+    }));
+    return parts.join('|');
+  }
+  const netIds = n => n.general ? [[E.assets, [16]], [E.hvs, [31, 32]]] : [[E.hvs, [n.g + 1, n.g + 2, n.g + 3, n.g + 4]]];
+  const netSig = n => Promise.all(netIds(n).map(([b, ids]) => layerSig(b, ids))).then(x => x.join('#'));
   const envelope = (p, km) => { const d = km / 111, dx = km / (111 * Math.cos(p[1] * Math.PI / 180)); return `&geometry=${encodeURIComponent([p[0] - dx, p[1] - d, p[0] + dx, p[1] + d].join(','))}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects`; };
 
   // ---- networks ----
   async function network(key, { force, onStatus } = {}) {
     const n = RR.net(key);
-    return RR.store.cached('net2-' + key, C.cacheDays * DAY, async () => {
+    return RR.store.fresh('net2-' + key, { force, sig: () => netSig(n), loader: async () => {
       if (n.general) {
         const lines = (await fetchLayer(E.assets, 16, 'ROAD,ROAD_NAME,NETWORK_TYPE,ROAD_HIERARCHY', { where: "ROAD_HIERARCHY <> 'Access Road'", onPage: c => onStatus && onStatus(`Downloading main roads… ${c}`) })).filter(truckRoad);
         lines.forEach(x => x.properties._cond = false);
@@ -39,7 +53,7 @@ RR.mainroads = (() => {
       const ints = await fetchLayer(E.hvs, n.g + 2, 'NODE_DESCR,CONDITION').catch(() => []);
       const br = await fetchLayer(E.hvs, n.g + 1, '*').catch(() => []);
       return { lines, ints, br, prohibited: [] };
-    }, force);
+    } });
   }
   // local streets around a point (full road network, adaptive radius) for general-access routing
   const LOCAL = new Map();
@@ -57,7 +71,7 @@ RR.mainroads = (() => {
 
   // ---- low overpasses / rail bridges ----
   async function structures() {
-    const f = await RR.store.cached('structs1', C.cacheDays * DAY, () => fetchLayer(E.hvs, 781, 'ROAD_NAME,MAXIMUM_LOAD_HEIGHT,STR_DESCR,SUBURB,CROSSING_NAME')).catch(() => []);
+    const f = await RR.store.fresh('structs1', { sig: () => layerSig(E.hvs, [781]), loader: () => fetchLayer(E.hvs, 781, 'ROAD_NAME,MAXIMUM_LOAD_HEIGHT,STR_DESCR,SUBURB,CROSSING_NAME') }).catch(() => []);
     return f.filter(x => x.geometry).map(x => ({ at: x.geometry.coordinates, road: x.properties.ROAD_NAME || '', maxH: +x.properties.MAXIMUM_LOAD_HEIGHT || 0, descr: x.properties.STR_DESCR || 'Structure', suburb: x.properties.SUBURB || '', crossing: x.properties.CROSSING_NAME || '' }));
   }
 
@@ -66,7 +80,7 @@ RR.mainroads = (() => {
     const layers = [[0, 'rtaa'], [1, 'hvrest'], [2, 'rest'], [3, 'rest'], [4, 'roadhouse']];
     const all = [];
     for (const [id, kind] of layers) {
-      const f = await RR.store.cached('fac1-' + id, C.cacheDays * DAY, () => fetchLayer(E.hvs, id, '*')).catch(() => []);
+      const f = await RR.store.fresh('fac1-' + id, { sig: () => layerSig(E.hvs, [id]), loader: () => fetchLayer(E.hvs, id, '*') }).catch(() => []);
       for (const x of f) {
         if (!x.geometry) continue; const p = x.properties || {};
         const yes = v => v && /^(y|yes|true|1)$/i.test(String(v));

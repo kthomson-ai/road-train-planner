@@ -11,6 +11,9 @@ RR.config = (() => {
       nominatim: 'https://nominatim.openstreetmap.org/search'
     },
     // Google Maps Platform demo key, restricted to kthomson-ai.github.io
+    // shared driver reports + tester feedback (Supabase; public key, protected by row level security)
+    reports: { mode: 'remote', endpoint: 'https://xybywnjskowqaxlbrfya.supabase.co/rest/v1', key: 'sb_publishable_uGKkcwYOZHcgKP2VZBptKg_xmNXwFwR' },
+    appVersion: '0.9 field test',
     googleKey: 'AIzaSyBVhkli3WgpzPo3JtEOVtvlOBGC-58daU4',
     cacheDays: 7,
     WA: { west: 112, south: -35.3, east: 129.2, north: -13.5 },
