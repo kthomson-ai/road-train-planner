@@ -130,7 +130,9 @@ RR.trip = (() => {
     let cum = [0]; for (let i = 1; i < L.length; i++) cum.push(cum[i - 1] + RAV.hav(L[i - 1], L[i]));
     for (let k = 0; k < n; k++) { const target = route.total * (k / (n - 1)); let i = cum.findIndex(c => c >= target); if (i < 0) i = L.length - 1; pts.push({ at: L[i], along: cum[i] }); }
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${pts.map(p => p.at[1].toFixed(3)).join(',')}&longitude=${pts.map(p => p.at[0].toFixed(3)).join(',')}&hourly=wind_gusts_10m,temperature_2m,precipitation&forecast_days=3&timezone=Australia%2FPerth`;
-    const r = await fetch(url); if (!r.ok) throw new Error('weather ' + r.status);
+    const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 8000);
+    let r; try { r = await fetch(url, { signal: ac.signal }); } finally { clearTimeout(tm); }
+    if (!r.ok) throw new Error('weather ' + r.status);
     let j = await r.json(); if (!Array.isArray(j)) j = [j];
     const issues = [];
     pts.forEach((p, k) => {
