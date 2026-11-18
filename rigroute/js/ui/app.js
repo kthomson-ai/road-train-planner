@@ -392,7 +392,9 @@
     const shown = mapAlertSet(live, reps);
     RR.map.setAlerts(shown, a => { RR.map.get().setView([a.at[1], a.at[0]], 13); if (a.cat === 'report') reportPopup(a); else toast(`${a.title}: ${a.status || ''}`, 5000); });
     const n = live.filter(a => a.tone === 'red').length;
-    $('alertBadge').hidden = !(live.length + reps.length); $('alertBadge').textContent = live.length + reps.length; $('tabAlertDot').hidden = !n;
+    // toolbar badge: how many alerts matter right now (on your route, or closures/floods/fire/reports near you)
+    const sh = app.sheet; app.sheet = null; const rel = mapAlertSet(live, reps); app.sheet = sh;
+    const dot = $('tabAlertDot'); dot.hidden = !rel.length; dot.textContent = rel.length > 99 ? '99+' : rel.length; dot.classList.toggle('red', rel.some(x => x.tone === 'red'));
     const counts = { closure: 0, incident: 0, flood: 0, fire: 0, roadworks: 0 }; live.forEach(a => counts[a.cat] != null && counts[a.cat]++);
     const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
     const pills = [['closure', 'red', pl(counts.closure, 'closure', 'closures'), haz.closure && counts.closure], ['incident', 'amber', pl(counts.incident, 'incident', 'incidents'), haz.closure && counts.incident], ['fire', 'red', pl(counts.fire, 'fire', 'fires'), haz.fire && counts.fire], ['flood', 'blue', pl(counts.flood, 'flood alert', 'flood alerts'), haz.flood && counts.flood], ['roadworks', 'amber', pl(counts.roadworks, 'roadworks site', 'roadworks sites'), haz.roadworks], ['report', 'lime', pl(reps.length, 'driver report', 'driver reports'), haz.report && reps.length]];

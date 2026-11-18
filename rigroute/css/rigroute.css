@@ -57,7 +57,10 @@ svg.i { width: 22px; height: 22px; flex: none; }
 .tab { background: none; border: 0; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11.5px; font-weight: 600; cursor: pointer; position: relative; }
 .tab.on { color: var(--lime-text); }
 .tab.on::before { content: ''; position: absolute; top: 0; width: 34px; height: 3px; border-radius: 0 0 3px 3px; background: var(--lime); }
-.tab .dot { position: absolute; top: 10px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
+.tab .dot { position: absolute; top: 5px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--amber); color: #101418; font: 800 11px/18px var(--font); font-style: normal; text-align: center; }
+.tab .dot.red { background: var(--red); color: #fff; }
+.tab .dot[hidden] { display: none; }
+#fabAlerts { display: none !important; }
 
 /* ---------- sheets ---------- */
 .sheet { position: fixed; left: 0; right: 0; bottom: calc(var(--tab-h) + var(--safe-b)); z-index: 22; max-height: calc(100% - var(--tab-h) - var(--safe-b) - 80px - var(--safe-t)); background: var(--bg); border-top-left-radius: 22px; border-top-right-radius: 22px; border: 1px solid var(--line); border-bottom: 0; box-shadow: 0 -10px 40px rgba(0,0,0,.5); transform: translateY(110%); transition: transform .32s cubic-bezier(.2,.8,.2,1); display: flex; flex-direction: column; }
