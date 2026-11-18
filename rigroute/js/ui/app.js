@@ -798,6 +798,12 @@
   if (RR.store.get('disclaimerOk', 0) < DC_VER) setTimeout(showDisclaimer, 1100);
 
 
+  // Main Roads often names a roadhouse only by its road: add the nearest town so drivers know where it is
+  function nearestTown(pt, maxM = 40000) { let best = null, bd = maxM; for (const t of RR.places.towns()) { const d = RAV.hav(pt, t.at); if (d < bd) { bd = d; best = t; } } return best; }
+  function placeName(f) {
+    if (/roadhouse|road house|station|truck stop|tavern|hotel|store|services/i.test(f.name) && !/^(.*\b(hwy|highway|road|rd)\b)$/i.test(f.name)) return f.name;
+    const t = nearestTown(f.at); return `${f.kind === 'roadhouse' ? 'Roadhouse' : 'Diesel'}${t ? ' near ' + t.name : ''} (${f.name})`;
+  }
   // ---------- trip: departure, fuel, permit picker ----------
   function paintTripInputs() {
     const v = RR.vehicles.active();
@@ -814,7 +820,7 @@
   async function paintFuel(r) {
     const v = app.PROF || RR.vehicles.active(); const el = $('routeFuel'); if (!el) return;
     if (!v.tankL || !v.useL) { el.innerHTML = ''; return; }
-    const mr = (r.along.facilities || []).filter(f => f.kind === 'roadhouse' || f.tags.includes('diesel')).map(f => ({ name: f.name, along: f.along, at: f.at, source: 'Main Roads' }));
+    const mr = (r.along.facilities || []).filter(f => f.kind === 'roadhouse' || f.tags.includes('diesel')).map(f => ({ name: placeName(f), along: f.along, at: f.at, source: 'Main Roads' }));
     const draw = (stops, note) => {
       const fp = RR.trip.fuelPlan(r, v, app.FUEL || 100, stops); if (!fp || !$('routeFuel')) return;
       const bad = fp.gaps.length > 0, km = x => Math.round(x).toLocaleString() + ' km';
