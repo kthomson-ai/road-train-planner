@@ -324,6 +324,51 @@ const RAV = (() => {
   const bbox = (pts, pad) => { let x0 = 180, y0 = 90, x1 = -180, y1 = -90; for (const p of pts) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } return [x0 - pad, y0 - pad, x1 + pad, y1 + pad]; };
   const inB = (p, b) => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
 
-  return { build, route, snap, hav, parseRule, namesMatch, stripHtml };
+  // multi-stop: pts = [start, stop1, ..., destination]; labels optional; firstStopNo = number of the first stop in pts (for reroutes)
+  // drop a near-zero first step (start snapped onto a junction) so directions begin with a real manoeuvre
+  function trimStart(r, verb) {
+    if (r.steps.length > 1 && r.steps[0].len < 20) { const n = r.steps[1]; n.len += r.steps[0].len; n.pts = r.steps[0].pts.concat(n.pts.slice(1)); n.at = r.steps[0].at; r.steps.shift(); }
+    r.steps[0].instr = verb; return r;
+  }
+  function routeVia(G, pts, labels = [], firstStopNo = 1) {
+    if (pts.length === 2) { const r = route(G, pts[0], pts[1]); if (!r.error) { trimStart(r, 'Start on'); r.legs2 = [r]; } return r; }
+    const legs = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const r = route(G, pts[i], pts[i + 1]);
+      if (r.error) return { error: `Leg ${i + 1} (${i === 0 ? 'start' : 'stop ' + (firstStopNo + i - 1)} → ${i === pts.length - 2 ? 'destination' : 'stop ' + (firstStopNo + i)}): ${r.error}` };
+      legs.push(r);
+    }
+    const line = [], steps = [], conds = new Map(), rules = new Map(), brs = new Map();
+    let total = 0, secs = 0;
+    legs.forEach((r, i) => {
+      line.push(...(i ? r.line.slice(1) : r.line));
+      if (i > 0) {
+        const no = firstStopNo + i - 1;
+        steps.push({ instr: 'Arrive at stop ' + no + ':', name: labels[i] || ('Stop ' + no), len: 0, at: r.s.pt, pts: [r.s.pt], stop: no });
+      }
+      trimStart(r, i > 0 ? 'Leave on' : 'Start on');
+      r.steps.forEach(s => steps.push({ ...s }));
+      r.conditions.forEach(c => { const k = c.road + '|' + c.text; if (!conds.has(k)) conds.set(k, c); });
+      r.rulesNear.forEach(x => rules.set(x.text + x.at.join(), x));
+      r.bridgesNear.forEach(b => brs.set(b.at.join(), b));
+      total += r.total; secs += r.secs;
+    });
+    return { line, steps, total, secs, s: legs[0].s, t: legs[legs.length - 1].t, legs2: legs, conditions: [...conds.values()], rulesNear: [...rules.values()], bridgesNear: [...brs.values()] };
+  }
+  // order stops to minimise driving time (start and destination fixed). pts as above. Returns new order of stop indexes.
+  function optimiseOrder(G, pts) {
+    const n = pts.length, M = [...Array(n)].map(() => new Float64Array(n).fill(Infinity));
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (i !== j && j !== 0 && i !== n - 1) { const r = route(G, pts[i], pts[j]); if (!r.error) M[i][j] = r.secs; }
+    const stops = [...Array(n - 2).keys()].map(k => k + 1);
+    // nearest neighbour then 2-opt
+    let order = [], cur = 0, left = new Set(stops);
+    while (left.size) { let b = null, bc = Infinity; for (const s of left) if (M[cur][s] < bc) { bc = M[cur][s]; b = s; } if (b === null) b = [...left][0]; order.push(b); left.delete(b); cur = b; }
+    const cost = o => { let c = 0, p = 0; for (const s of o) { c += M[p][s]; p = s; } return c + M[p][n - 1]; };
+    let best = cost(order), improved = true;
+    while (improved) { improved = false; for (let a = 0; a < order.length - 1; a++) for (let b = a + 1; b < order.length; b++) { const o = order.slice(0, a).concat(order.slice(a, b + 1).reverse(), order.slice(b + 1)); const c = cost(o); if (c + 1e-6 < best) { best = c; order = o; improved = true; } } }
+    return { order: order.map(s => s - 1), secs: best, before: cost(stops) };
+  }
+
+  return { build, route, routeVia, optimiseOrder, snap, hav, parseRule, namesMatch, stripHtml };
 })();
 if (typeof module !== 'undefined') module.exports = RAV;

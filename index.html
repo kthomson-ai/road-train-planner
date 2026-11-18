@@ -51,6 +51,17 @@
   .sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
   .foot { font-size: 11.5px; color: var(--muted); margin-top: 22px; border-top: 1px solid var(--line); padding-top: 10px; }
   .foot a { color: var(--muted); }
+  .stoprow { margin-top: 8px; }
+  .stoprow .lbl { font-size: 12px; font-weight: 600; color: #b45309; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
+  .stoprow .row button { padding: 8px 9px; }
+  .stopbtns { display: flex; gap: 6px; margin-top: 8px; }
+  #junc { display: none; }
+  body.driving #junc { display: block; position: fixed; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0)); z-index: 1000; width: 168px; background: #fff; border-radius: 14px; box-shadow: 0 3px 14px rgba(0,0,0,.3); overflow: hidden; }
+  #junc svg { display: block; width: 168px; height: 150px; }
+  #junc .jl { font-size: 12px; color: var(--muted); padding: 6px 10px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #junc .jd { font-size: 26px; font-weight: 800; padding: 0 10px 6px; }
+  #junc .jbar { height: 6px; background: #e5e9ed; }
+  #junc .jbar i { display: block; height: 100%; width: 0; background: #0b62d6; transition: width .4s; }
   .mic { min-width: 42px; }
   .mic.on { background: #fde2e2; border-color: #f5a3a3; }
   .drive { display: flex; gap: 8px; margin-top: 10px; }
@@ -79,7 +90,7 @@
 <div class="app">
   <aside>
     <h1>WA Road Train Route Planner</h1>
-    <div class="sub">Prototype v0.4.1 (voice + driving mode) · routes only on Main Roads WA approved RAV networks</div>
+    <div class="sub">Prototype v0.5 (multi-stop, voice + driving mode) · routes only on Main Roads WA approved RAV networks</div>
 
     <label for="net">Vehicle / approved network</label>
     <select id="net">
@@ -94,6 +105,9 @@
     <label for="from">Start</label>
     <div class="row"><input id="from" type="text" placeholder="Town, address or lat,lon"><button class="mic" data-mic="from" title="Say the start">🎤</button><button id="gps" title="Use my location">📍</button></div>
     <div id="fromChoices"></div>
+
+    <div id="stops"></div>
+    <div class="stopbtns"><button class="small" id="addStop">+ Add stop</button><button class="small" id="optStops" style="display:none" title="Reorder the stops for the quickest legal run (start and destination stay put)">Optimise stop order</button></div>
 
     <label for="to">Destination</label>
     <div class="row"><input id="to" type="text" placeholder="Town, address or lat,lon"><button class="mic" data-mic="to" title="Say the destination">🎤</button></div>
@@ -127,6 +141,7 @@
 </div>
 <div id="navbar"><div class="na" id="nArrow">↑</div><div class="nd" id="nDist"></div><div class="ni" id="nInstr"></div></div>
 <div id="flash"></div>
+<div id="junc"><div class="jl" id="jLabel"></div><svg id="jSvg" viewBox="-70 -70 140 140" preserveAspectRatio="xMidYMid slice"></svg><div class="jd" id="jDist"></div><div class="jbar"><i id="jBar"></i></div></div>
 <div id="navbot"><span class="eta" id="nEta"></span><button id="nMute">🔊</button><button id="nCentre">⌖</button><button class="stop" id="nStop">Stop</button></div>
 
 <script>
@@ -456,7 +471,52 @@ const RAV = (() => {
   const bbox = (pts, pad) => { let x0 = 180, y0 = 90, x1 = -180, y1 = -90; for (const p of pts) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } return [x0 - pad, y0 - pad, x1 + pad, y1 + pad]; };
   const inB = (p, b) => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
 
-  return { build, route, snap, hav, parseRule, namesMatch, stripHtml };
+  // multi-stop: pts = [start, stop1, ..., destination]; labels optional; firstStopNo = number of the first stop in pts (for reroutes)
+  // drop a near-zero first step (start snapped onto a junction) so directions begin with a real manoeuvre
+  function trimStart(r, verb) {
+    if (r.steps.length > 1 && r.steps[0].len < 20) { const n = r.steps[1]; n.len += r.steps[0].len; n.pts = r.steps[0].pts.concat(n.pts.slice(1)); n.at = r.steps[0].at; r.steps.shift(); }
+    r.steps[0].instr = verb; return r;
+  }
+  function routeVia(G, pts, labels = [], firstStopNo = 1) {
+    if (pts.length === 2) { const r = route(G, pts[0], pts[1]); if (!r.error) { trimStart(r, 'Start on'); r.legs2 = [r]; } return r; }
+    const legs = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const r = route(G, pts[i], pts[i + 1]);
+      if (r.error) return { error: `Leg ${i + 1} (${i === 0 ? 'start' : 'stop ' + (firstStopNo + i - 1)} → ${i === pts.length - 2 ? 'destination' : 'stop ' + (firstStopNo + i)}): ${r.error}` };
+      legs.push(r);
+    }
+    const line = [], steps = [], conds = new Map(), rules = new Map(), brs = new Map();
+    let total = 0, secs = 0;
+    legs.forEach((r, i) => {
+      line.push(...(i ? r.line.slice(1) : r.line));
+      if (i > 0) {
+        const no = firstStopNo + i - 1;
+        steps.push({ instr: 'Arrive at stop ' + no + ':', name: labels[i] || ('Stop ' + no), len: 0, at: r.s.pt, pts: [r.s.pt], stop: no });
+      }
+      trimStart(r, i > 0 ? 'Leave on' : 'Start on');
+      r.steps.forEach(s => steps.push({ ...s }));
+      r.conditions.forEach(c => { const k = c.road + '|' + c.text; if (!conds.has(k)) conds.set(k, c); });
+      r.rulesNear.forEach(x => rules.set(x.text + x.at.join(), x));
+      r.bridgesNear.forEach(b => brs.set(b.at.join(), b));
+      total += r.total; secs += r.secs;
+    });
+    return { line, steps, total, secs, s: legs[0].s, t: legs[legs.length - 1].t, legs2: legs, conditions: [...conds.values()], rulesNear: [...rules.values()], bridgesNear: [...brs.values()] };
+  }
+  // order stops to minimise driving time (start and destination fixed). pts as above. Returns new order of stop indexes.
+  function optimiseOrder(G, pts) {
+    const n = pts.length, M = [...Array(n)].map(() => new Float64Array(n).fill(Infinity));
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (i !== j && j !== 0 && i !== n - 1) { const r = route(G, pts[i], pts[j]); if (!r.error) M[i][j] = r.secs; }
+    const stops = [...Array(n - 2).keys()].map(k => k + 1);
+    // nearest neighbour then 2-opt
+    let order = [], cur = 0, left = new Set(stops);
+    while (left.size) { let b = null, bc = Infinity; for (const s of left) if (M[cur][s] < bc) { bc = M[cur][s]; b = s; } if (b === null) b = [...left][0]; order.push(b); left.delete(b); cur = b; }
+    const cost = o => { let c = 0, p = 0; for (const s of o) { c += M[p][s]; p = s; } return c + M[p][n - 1]; };
+    let best = cost(order), improved = true;
+    while (improved) { improved = false; for (let a = 0; a < order.length - 1; a++) for (let b = a + 1; b < order.length; b++) { const o = order.slice(0, a).concat(order.slice(a, b + 1).reverse(), order.slice(b + 1)); const c = cost(o); if (c + 1e-6 < best) { best = c; order = o; improved = true; } } }
+    return { order: order.map(s => s - 1), secs: best, before: cost(stops) };
+  }
+
+  return { build, route, routeVia, optimiseOrder, snap, hav, parseRule, namesMatch, stripHtml };
 })();
 if (typeof module !== 'undefined') module.exports = RAV;
 
@@ -480,11 +540,11 @@ const NAV = (() => {
   }
   const ABBR = [[/\bHwy\b/g, 'Highway'], [/\bGNH\b/g, 'Great Northern Highway'], [/\bRd\b/g, 'Road'], [/\bSt\b/g, 'Street'], [/\bDr\b/g, 'Drive'], [/\bAve?\b/g, 'Avenue'], [/\bPde\b/g, 'Parade'], [/\bTce\b/g, 'Terrace'], [/\bCres\b/g, 'Crescent'], [/\bPl\b/g, 'Place'], [/\bCt\b/g, 'Court'], [/\bBvd\b/g, 'Boulevard'], [/\bWy\b/g, 'Way'], [/\bRty\b/g, 'roundabout'], [/\bNth\b/g, 'North'], [/\bSth\b/g, 'South'], [/\bMt\b/g, 'Mount'], [/\s*\((North|South|East|West)bound\)/gi, ''], [/ - /g, ' ']];
   const speakName = n => { let s = n || 'the road'; for (const [re, r] of ABBR) s = s.replace(re, r); s = s.replace(/\boff to\b/i, 'exit to').replace(/\bon to\b/i, 'ramp to'); return s; };
-  const speakInstr = st => { const verb = st.instr.replace(/ onto$/, '').replace(/^Continue$/, 'Continue'); return `${verb} onto ${speakName(st.name)}`; };
+  const speakInstr = st => { if (st.stop) return `arrive at stop ${st.stop}, ${speakName(st.name)}`; const verb = st.instr.replace(/ onto$/, '').replace(/^Leave on$/, 'Head off'); return `${verb} onto ${speakName(st.name)}`; };
   const speakDist = m => m >= 950 ? `In ${m >= 9500 ? Math.round(m / 1000) : (Math.round(m / 500) / 2).toString()} kilometres` : `In ${m >= 300 ? Math.round(m / 100) * 100 : Math.max(50, Math.round(m / 50) * 50)} metres`;
 
   // ---- state ----
-  let arrived = false, map = null, R = null, cum = null, man = null, warn = null, ui = null, watchId = null, lock = null, lastIdx = 0, offCount = 0, sim = null, active = false, lastFix = null, rerouting = false, opts = null, posMarker = null, endInfo = null;
+  let reachedStop = 0, jKey = null, arrived = false, map = null, R = null, cum = null, man = null, warn = null, ui = null, watchId = null, lock = null, lastIdx = 0, offCount = 0, sim = null, active = false, lastFix = null, rerouting = false, opts = null, posMarker = null, endInfo = null;
 
   function prepare(route) {
     R = route; const L = route.line; cum = new Float64Array(L.length); for (let i = 1; i < L.length; i++) cum[i] = cum[i - 1] + hav(L[i - 1], L[i]);
@@ -528,9 +588,16 @@ const NAV = (() => {
       const far = Math.max(1500, v * 75), mid = Math.max(400, v * 22), now = Math.max(80, v * 6);
       if (dist <= far && dist > mid * 1.3 && !next.said.far && dist > 1200) { next.said.far = 1; say(`${speakDist(dist)}, ${speakInstr(next.step).toLowerCase()}`); }
       else if (dist <= mid && dist > now * 1.5 && !next.said.mid) { next.said.mid = 1; next.said.far = 1; say(`${speakDist(dist)}, ${speakInstr(next.step).toLowerCase()}`); }
-      else if (dist <= now && !next.said.now) { next.said.now = next.said.mid = next.said.far = 1; say(speakInstr(next.step), true); }
+      else if (dist <= now && !next.said.now) {
+        next.said.now = next.said.mid = next.said.far = 1;
+        if (next.step.stop) { reachedStop = Math.max(reachedStop, next.step.stop); say(`You've reached stop ${next.step.stop}, ${speakName(next.step.name)}.`, true); flash(`Stop ${next.step.stop} reached: ${next.step.name}`); }
+        else say(speakInstr(next.step), true);
+      }
+      // stops passed without the 'now' call (e.g. GPS gap) still count as reached
+      for (const m of man) if (m.step.stop && m.d < along - 30) reachedStop = Math.max(reachedStop, m.step.stop);
       showBanner(next.step, dist, remain);
-    } else showBanner(null, remain, remain);
+      junction(next, dist);
+    } else { showBanner(null, remain, remain); junction(null, remain); }
     // condition warnings ~1.5 km ahead
     for (const w of warn) { if (w.said) continue; const ahead = w.d - along; if (ahead < -50) { w.said = true; continue; } if (ahead <= 1500) { w.said = true; const txt = w.text.length > 160 ? w.text.slice(0, 157).replace(/\s\S*$/, '') + '…' : w.text; say(w.rule ? `Turn restriction ahead at ${speakName(w.road)}. ${txt}` : `Heads up. ${speakName(w.road)} has a condition. ${txt}`); flash(`${w.road}: ${w.text}`); } }
     // arrival
@@ -552,10 +619,44 @@ const NAV = (() => {
   async function reroute(pt) {
     rerouting = true; say('Off route. Finding a new legal route.', true); flash('Off route, rerouting on approved roads…');
     await new Promise(r => setTimeout(r, 30));
-    const r = opts.reroute(pt);
+    const r = opts.reroute(pt, reachedStop);
     rerouting = false; offCount = 0;
     if (r && !r.error) { prepare(r); opts.drawRoute(r); say(`New route. ${fmtKm(r.total).replace('km', 'kilometres')} to go.`); }
     else { say('Could not find a legal route from here. Head back to the approved route.'); flash('No legal route from here. Return to the approved route (blue line).'); }
+  }
+
+  // ---- next-turn junction diagram ----
+  function pointAt(d) { const L = R.line; d = Math.max(0, Math.min(cum[cum.length - 1], d)); let i = 1; while (i < cum.length - 1 && cum[i] < d) i++; const t = (d - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]); return [L[i - 1][0] + (L[i][0] - L[i - 1][0]) * t, L[i - 1][1] + (L[i][1] - L[i - 1][1]) * t]; }
+  function slice(d0, d1) { const L = R.line, out = [pointAt(d0)]; for (let i = 0; i < L.length; i++) if (cum[i] > d0 && cum[i] < d1) out.push(L[i]); out.push(pointAt(d1)); return out; }
+  function junction(m, dist) {
+    const box = ui.junc; if (!box) return;
+    const key = m ? m.d.toFixed(0) : 'end';
+    if (key !== jKey) { jKey = key; box.svg.innerHTML = m ? (m.step.stop ? stopSvg(m.step.stop) : junctionSvg(m)) : flagSvg(); }
+    box.dist.textContent = fmtKm(Math.max(0, dist));
+    box.bar.style.width = (100 * (1 - Math.min(dist, 1000) / 1000)).toFixed(0) + '%';
+    box.label.textContent = m ? (m.step.stop ? 'Stop ' + m.step.stop : m.step.instr.replace(/ onto$/, '').replace(/^At the roundabout, /, 'Roundabout: ')) : 'Destination';
+  }
+  const flagSvg = () => '<circle cx="0" cy="0" r="48" fill="#eef3ee"/><path d="M-10 30 V-30 M-10 -30 L22 -18 L-10 -6" stroke="#15803d" stroke-width="7" fill="none" stroke-linejoin="round" stroke-linecap="round"/>';
+  const stopSvg = n => `<circle cx="0" cy="0" r="48" fill="#fff7ed"/><path d="M0 34 C-4 18 -22 6 -22 -10 A22 22 0 0 1 22 -10 C22 6 4 18 0 34Z" fill="#d97706"/><text x="0" y="-4" text-anchor="middle" font-size="22" font-weight="700" fill="#fff" font-family="system-ui">${n}</text>`;
+  function junctionSvg(m) {
+    const c = m.step.at || pointAt(m.d), cx = kx(c[1]);
+    const back = pointAt(m.d - 40);
+    const bIn = Math.atan2((c[0] - back[0]) * cx, (c[1] - back[1]) * KY); // radians from north
+    const S = 0.42; // px per metre
+    const toXY = p => { const x = (p[0] - c[0]) * cx, y = (p[1] - c[1]) * KY; const r = bIn; const xr = x * Math.cos(r) - y * Math.sin(r), yr = x * Math.sin(r) + y * Math.cos(r); return [xr * S, -yr * S]; };
+    const path = pts => pts.map((p, i) => (i ? 'L' : 'M') + toXY(p).map(v => v.toFixed(1)).join(' ')).join(' ');
+    let side = '';
+    const G = opts.graph && opts.graph();
+    if (G) { // side roads at this junction
+      let bj = -1, bd = 35; for (let j = 0; j < G.J.length; j++) { const v = G.coords[G.J[j]]; if (Math.abs(v[1] - c[1]) > 0.0005 || Math.abs(v[0] - c[0]) > 0.0006) continue; const d = hav(v, c); if (d < bd) { bd = d; bj = j; } }
+      if (bj >= 0) for (const dd of G.out[bj]) { const e = G.E[dd >> 1]; const p = (dd & 1) ? e.path.slice().reverse() : e.path; const pts = [G.coords[p[0]]]; let acc = 0; for (let k = 1; k < p.length && acc < 170; k++) { acc += hav(G.coords[p[k - 1]], G.coords[p[k]]); pts.push(G.coords[p[k]]); } side += `<path d="${path(pts)}" stroke="#c4cad1" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`; }
+    }
+    const inPts = slice(m.d - 170, m.d), outPts = slice(m.d, m.d + 120);
+    const o = outPts.map(toXY); const a = o[o.length - 1], b = o[Math.max(0, o.length - 2)];
+    const ang = Math.atan2(a[1] - b[1], a[0] - b[0]); const tip = [a[0] + 9 * Math.cos(ang), a[1] + 9 * Math.sin(ang)];
+    const w1 = [a[0] + 11 * Math.cos(ang + 2.2), a[1] + 11 * Math.sin(ang + 2.2)], w2 = [a[0] + 11 * Math.cos(ang - 2.2), a[1] + 11 * Math.sin(ang - 2.2)];
+    const full = path(inPts.concat(outPts.slice(1)));
+    return `<rect x="-70" y="-70" width="140" height="140" fill="#f4f6f8"/>${side}<path d="${full}" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${full}" stroke="#0b62d6" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polygon points="${[tip, w1, w2].map(p => p.map(v => v.toFixed(1)).join(',')).join(' ')}" fill="#0b62d6" stroke="#fff" stroke-width="2"/><circle cx="0" cy="${(170 * S * 0.9).toFixed(0)}" r="0"/>`;
   }
 
   async function keepAwake() { try { if ('wakeLock' in navigator) { lock = await navigator.wakeLock.request('screen'); } } catch { } }
@@ -563,7 +664,7 @@ const NAV = (() => {
   function stopTracking() { if (watchId !== null) { try { navigator.geolocation.clearWatch(watchId); } catch { } watchId = null; } if (sim) { clearInterval(sim.t); sim = null; } }
 
   function start(route, o, demo) {
-    opts = o; ui = o.ui; map = o.map; endInfo = o.endInfo || null;
+    opts = o; ui = o.ui; map = o.map; endInfo = o.endInfo || null; reachedStop = 0; jKey = null;
     prepare(route); active = true; document.body.classList.add('driving');
     if (!posMarker) posMarker = L.circleMarker([route.line[0][1], route.line[0][0]], { radius: 9, color: '#fff', weight: 3, fillColor: '#0b62d6', fillOpacity: 1 }).addTo(map); else posMarker.addTo(map);
     keepAwake();
@@ -643,12 +744,15 @@ loadGoogle().then(async () => {
 }).catch(() => { esri.addTo(map); gNote('Google not available; using free map and search.'); });
 const netLayer = L.layerGroup().addTo(map), routeLayer = L.layerGroup().addTo(map), markLayer = L.layerGroup().addTo(map);
 const pin = (color) => L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
-const P = { from: null, to: null }; // {lon,lat,label}
+const P = { from: null, to: null }; // {lon,lat,label}; stops use their own ids
+let stopIds = [], stopSeq = 0;
+const numPin = n => L.divIcon({ className: '', html: `<div style="width:22px;height:22px;border-radius:50%;background:#d97706;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);color:#fff;font:700 12px/16px system-ui;text-align:center">${n}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
 const marks = {};
 function setPoint(which, lon, lat, label) {
   P[which] = { lon, lat, label }; $(which).value = label;
   if (marks[which]) markLayer.removeLayer(marks[which]);
-  marks[which] = L.marker([lat, lon], { icon: pin(which === 'from' ? '#15803d' : '#b91c1c') }).addTo(markLayer).bindTooltip(which === 'from' ? 'Start' : 'Destination');
+  const isStop = which !== 'from' && which !== 'to';
+  marks[which] = L.marker([lat, lon], { icon: isStop ? numPin(stopIds.indexOf(which) + 1) : pin(which === 'from' ? '#15803d' : '#b91c1c') }).addTo(markLayer).bindTooltip(which === 'from' ? 'Start' : which === 'to' ? 'Destination' : 'Stop ' + (stopIds.indexOf(which) + 1));
   updateGo();
 }
 
@@ -770,10 +874,48 @@ async function resolveInput(which) { // returns true when the point is set
   } catch (e) { if (netFail(e)) { showBlocked(); status('Address search could not connect.'); } else status('Address search failed: ' + e.message); }
   return false;
 }
-for (const w of ['from', 'to']) {
+function wireInput(w) {
   $(w).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); resolveInput(w); } });
   $(w).addEventListener('input', () => { if (P[w] && $(w).value !== P[w].label) { P[w] = null; } updateGo(); suggest(w); });
 }
+for (const w of ['from', 'to']) wireInput(w);
+// ---- stops ----
+function renumberStops() {
+  stopIds.forEach((id, i) => { const row = $('row-' + id); row.querySelector('.lbl').textContent = 'Stop ' + (i + 1); if (marks[id] && P[id]) { markLayer.removeLayer(marks[id]); marks[id] = L.marker([P[id].lat, P[id].lon], { icon: numPin(i + 1) }).addTo(markLayer).bindTooltip('Stop ' + (i + 1)); } });
+  $('optStops').style.display = stopIds.length >= 2 ? '' : 'none';
+  $('addStop').disabled = stopIds.length >= 8;
+}
+function addStop() {
+  if (stopIds.length >= 8) return; const id = 's' + (++stopSeq); stopIds.push(id);
+  const row = document.createElement('div'); row.className = 'stoprow'; row.id = 'row-' + id;
+  row.innerHTML = `<div class="lbl"></div><div class="row"><input id="${id}" type="text" placeholder="Town, address or place"><button class="mic" data-mic="${id}" title="Say this stop">🎤</button><button data-up="${id}" title="Move up">↑</button><button data-down="${id}" title="Move down">↓</button><button data-del="${id}" title="Remove stop">✕</button></div><div id="${id}Choices"></div>`;
+  $('stops').appendChild(row); wireInput(id); wireMic(row.querySelector('[data-mic]'));
+  row.querySelector('[data-del]').onclick = () => { stopIds = stopIds.filter(x => x !== id); row.remove(); if (marks[id]) markLayer.removeLayer(marks[id]); delete marks[id]; delete P[id]; renumberStops(); };
+  const move = d => { const i = stopIds.indexOf(id), j = i + d; if (j < 0 || j >= stopIds.length) return; [stopIds[i], stopIds[j]] = [stopIds[j], stopIds[i]]; stopIds.forEach(x => $('stops').appendChild($('row-' + x))); renumberStops(); };
+  row.querySelector('[data-up]').onclick = () => move(-1); row.querySelector('[data-down]').onclick = () => move(1);
+  renumberStops(); $(id).focus();
+}
+$('addStop').onclick = addStop;
+const usedStops = () => stopIds.filter(id => $(id).value.trim());
+async function resolveAll() {
+  if (!await resolveInput('from')) return null;
+  for (const id of usedStops()) if (!await resolveInput(id)) return null;
+  if (!await resolveInput('to')) return null;
+  const ids = ['from', ...usedStops(), 'to'];
+  return { ids, pts: ids.map(i => [P[i].lon, P[i].lat]), labels: ids.map(i => P[i].label) };
+}
+$('optStops').onclick = async () => {
+  if (!G) return; const run = await resolveAll(); if (!run) return;
+  if (run.ids.length < 4) { status('Add at least two stops to optimise.'); return; }
+  status('Working out the quickest stop order…'); await new Promise(r => setTimeout(r, 30));
+  const res = RAV.optimiseOrder(G, run.pts);
+  const stopsUsed = run.ids.slice(1, -1), reordered = res.order.map(k => stopsUsed[k]);
+  const empty = stopIds.filter(id => !$(id).value.trim()); stopIds = reordered.concat(empty);
+  stopIds.forEach(x => $('stops').appendChild($('row-' + x))); renumberStops();
+  const saved = (res.before - res.secs) / 60;
+  NOTE = saved > 1 ? `Reordered stops: saves about ${Math.round(saved)} min.` : 'Stops were already in the best order.';
+  $('go').click();
+};
 // type-ahead suggestions (Google only)
 function suggest(w) {
   clearTimeout(sTimer[w]); const q = $(w).value.trim(); const box = $(w + 'Choices');
@@ -803,15 +945,15 @@ document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { pickMo
 map.on('click', e => { if (!pickMode) return; setPoint(pickMode, e.latlng.lng, e.latlng.lat, `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`); if (pickMode === 'from') { document.querySelector('[data-pick="to"]').click(); } else { document.querySelector('[data-pick=""]').click(); } });
 
 // ---- routing + rendering ----
-const ARROW = i => /sharp left/.test(i) ? '↰' : /sharp right/.test(i) ? '↱' : /left/.test(i) ? (/Bear/.test(i) ? '↖' : '←') : /right/.test(i) ? (/Bear/.test(i) ? '↗' : '→') : /Start/.test(i) ? '●' : '↑';
+const ARROW = i => /^Arrive at stop/.test(i) ? '📍' : /^Leave on/.test(i) ? '●' : /sharp left/.test(i) ? '↰' : /sharp right/.test(i) ? '↱' : /left/.test(i) ? (/Bear/.test(i) ? '↖' : '←') : /right/.test(i) ? (/Bear/.test(i) ? '↗' : '→') : /Start/.test(i) ? '●' : '↑';
 $('go').onclick = async () => {
   if (!G) return;
-  const okFrom = await resolveInput('from'); if (!okFrom) return;
-  const okTo = await resolveInput('to'); if (!okTo) return;
+  const run = await resolveAll(); if (!run) return;
   status('Finding a legal route…');
   setTimeout(() => {
     const t0 = performance.now();
-    const r = RAV.route(G, [P.from.lon, P.from.lat], [P.to.lon, P.to.lat]);
+    RUN = run;
+    const r = RAV.routeVia(G, run.pts, run.labels);
     render(r, performance.now() - t0);
   }, 10);
 };
@@ -822,13 +964,18 @@ function render(r, ms) {
   L.polyline(ll, { color: '#fff', weight: 9, opacity: 0.9 }).addTo(routeLayer);
   const pl = L.polyline(ll, { color: '#0b62d6', weight: 5 }).addTo(routeLayer);
   const gaps = [];
-  for (const [w, sn] of [['from', r.s], ['to', r.t]]) {
-    if (sn.d > OFF_NET_M) {
+  const ends = [['from', r.s, 'start']];
+  if (r.legs2 && RUN) r.legs2.slice(0, -1).forEach((lg, i) => ends.push([RUN.ids[i + 1], lg.t, 'stop ' + (i + 1)]));
+  ends.push(['to', r.t, 'destination']);
+  for (const [w, sn, nm] of ends) {
+    if (sn && P[w] && sn.d > OFF_NET_M) {
       L.polyline([[P[w].lat, P[w].lon], [sn.pt[1], sn.pt[0]]], { color: '#b91c1c', weight: 4, dashArray: '6 8' }).addTo(routeLayer);
-      gaps.push(w === 'from' ? `Your start is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The route begins where you join it.` : `Your destination is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The approved route ends at the red dashed line; the last leg needs road-owner approval or a different vehicle.`);
+      gaps.push(nm === 'start' ? `Your start is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The route begins where you join it.`
+        : nm === 'destination' ? `Your destination is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The approved route ends at the red dashed line; the last leg needs road-owner approval or a different vehicle.`
+        : `${nm[0].toUpperCase() + nm.slice(1)} is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The route reaches the nearest approved point; the run in needs road-owner approval or a different vehicle.`);
     }
   }
-  map.fitBounds(pl.getBounds().extend([P.from.lat, P.from.lon]).extend([P.to.lat, P.to.lon]), { padding: [30, 30] });
+  const bnd = pl.getBounds(); (RUN ? RUN.ids : ['from', 'to']).forEach(i => P[i] && bnd.extend([P[i].lat, P[i].lon])); map.fitBounds(bnd, { padding: [30, 30] });
   const hard = r.conditions.filter(c => c.notThrough);
   let h = `<div class="card"><div class="big">${fmtKm(r.total)} · ${fmtTime(r.secs)}</div><div class="hint">On Tandem Drive Network ${curNet} roads only. Time assumes 90 km/h on state roads, 70 km/h on local roads (or posted RAV limits), with no stops.</div></div>`;
   h += `<div class="drive"><button class="go" id="startDrive">▶ Start driving</button><button id="demoDrive" title="Plays the route as if driving, so you can hear the directions">Demo drive</button></div>`;
@@ -865,10 +1012,10 @@ function render(r, ms) {
   LAST = r; window.__dbgLast = () => LAST;
   $('startDrive').onclick = () => drive(false);
   $('demoDrive').onclick = () => drive(true);
-  status(`Route found in ${(ms / 1000).toFixed(1)} s.`);
+  status(NOTE || `Route found in ${(ms / 1000).toFixed(1)} s.`); NOTE = '';
 }
 // ---- driving mode wiring ----
-let LAST = null, follow = true;
+let LAST = null, RUN = null, NOTE = '', follow = true;
 map.on('dragstart', () => { if (NAV.isActive()) follow = false; });
 function drawRouteOnly(r) {
   routeLayer.clearLayers(); const ll = r.line.map(c => [c[1], c[0]]);
@@ -878,9 +1025,13 @@ function drive(demo) {
   if (!LAST) return; follow = true;
   const endInfo = LAST.t.d > OFF_NET_M ? `Your destination is ${fmtKm(LAST.t.d)} further, off the approved network.` : null;
   const ok = NAV.start(LAST, {
-    ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash') },
+    ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel') } },
     map, arrow: ARROW, net: curNet, endInfo, follow: () => follow, simSpeed: () => 1,
-    reroute: pt => { const r = RAV.route(G, pt, [P.to.lon, P.to.lat]); if (r && !r.error) LAST = r; return r; },
+    reroute: (pt, reached) => {
+      const stops = RUN ? RUN.pts.slice(1, -1) : [], labs = RUN ? RUN.labels.slice(1, -1) : [];
+      const pts = [pt, ...stops.slice(reached), [P.to.lon, P.to.lat]], labels = ['Current position', ...labs.slice(reached), P.to.label];
+      const r = RAV.routeVia(G, pts, labels, reached + 1); if (r && !r.error) LAST = r; return r; },
+    graph: () => G,
     drawRoute: drawRouteOnly
   }, demo);
   setTimeout(() => map.invalidateSize(), 50);
@@ -890,13 +1041,14 @@ $('nStop').onclick = () => { NAV.stop(); setTimeout(() => { map.invalidateSize()
 $('nCentre').onclick = () => { follow = true; };
 let isMuted = false; $('nMute').onclick = () => { isMuted = !isMuted; NAV.setMuted(isMuted); $('nMute').textContent = isMuted ? '🔇' : '🔊'; };
 // voice input
-document.querySelectorAll('[data-mic]').forEach(b => {
+document.querySelectorAll('[data-mic]').forEach(b => wireMic(b));
+function wireMic(b) {
   if (!VOICE.supported) { b.style.display = 'none'; return; }
   b.onclick = () => { const w = b.dataset.mic;
     VOICE.listen(txt => { $(w).value = txt; P[w] = null; updateGo(); resolveInput(w); },
       (st, err) => { b.classList.toggle('on', st === 'listening'); if (st === 'listening') status('Listening… say a town, address or place.'); if (st === 'error') status(err === 'not-allowed' ? 'Microphone blocked. Allow it in the browser (the hosted link works best on phones).' : 'Didn\'t catch that (' + err + '). Try again.'); });
   };
-});
+}
 
 $('net').onchange = () => prepare(false);
 $('refresh').onclick = () => prepare(true);

@@ -16,11 +16,11 @@ const NAV = (() => {
   }
   const ABBR = [[/\bHwy\b/g, 'Highway'], [/\bGNH\b/g, 'Great Northern Highway'], [/\bRd\b/g, 'Road'], [/\bSt\b/g, 'Street'], [/\bDr\b/g, 'Drive'], [/\bAve?\b/g, 'Avenue'], [/\bPde\b/g, 'Parade'], [/\bTce\b/g, 'Terrace'], [/\bCres\b/g, 'Crescent'], [/\bPl\b/g, 'Place'], [/\bCt\b/g, 'Court'], [/\bBvd\b/g, 'Boulevard'], [/\bWy\b/g, 'Way'], [/\bRty\b/g, 'roundabout'], [/\bNth\b/g, 'North'], [/\bSth\b/g, 'South'], [/\bMt\b/g, 'Mount'], [/\s*\((North|South|East|West)bound\)/gi, ''], [/ - /g, ' ']];
   const speakName = n => { let s = n || 'the road'; for (const [re, r] of ABBR) s = s.replace(re, r); s = s.replace(/\boff to\b/i, 'exit to').replace(/\bon to\b/i, 'ramp to'); return s; };
-  const speakInstr = st => { const verb = st.instr.replace(/ onto$/, '').replace(/^Continue$/, 'Continue'); return `${verb} onto ${speakName(st.name)}`; };
+  const speakInstr = st => { if (st.stop) return `arrive at stop ${st.stop}, ${speakName(st.name)}`; const verb = st.instr.replace(/ onto$/, '').replace(/^Leave on$/, 'Head off'); return `${verb} onto ${speakName(st.name)}`; };
   const speakDist = m => m >= 950 ? `In ${m >= 9500 ? Math.round(m / 1000) : (Math.round(m / 500) / 2).toString()} kilometres` : `In ${m >= 300 ? Math.round(m / 100) * 100 : Math.max(50, Math.round(m / 50) * 50)} metres`;
 
   // ---- state ----
-  let arrived = false, map = null, R = null, cum = null, man = null, warn = null, ui = null, watchId = null, lock = null, lastIdx = 0, offCount = 0, sim = null, active = false, lastFix = null, rerouting = false, opts = null, posMarker = null, endInfo = null;
+  let reachedStop = 0, jKey = null, arrived = false, map = null, R = null, cum = null, man = null, warn = null, ui = null, watchId = null, lock = null, lastIdx = 0, offCount = 0, sim = null, active = false, lastFix = null, rerouting = false, opts = null, posMarker = null, endInfo = null;
 
   function prepare(route) {
     R = route; const L = route.line; cum = new Float64Array(L.length); for (let i = 1; i < L.length; i++) cum[i] = cum[i - 1] + hav(L[i - 1], L[i]);
@@ -64,9 +64,16 @@ const NAV = (() => {
       const far = Math.max(1500, v * 75), mid = Math.max(400, v * 22), now = Math.max(80, v * 6);
       if (dist <= far && dist > mid * 1.3 && !next.said.far && dist > 1200) { next.said.far = 1; say(`${speakDist(dist)}, ${speakInstr(next.step).toLowerCase()}`); }
       else if (dist <= mid && dist > now * 1.5 && !next.said.mid) { next.said.mid = 1; next.said.far = 1; say(`${speakDist(dist)}, ${speakInstr(next.step).toLowerCase()}`); }
-      else if (dist <= now && !next.said.now) { next.said.now = next.said.mid = next.said.far = 1; say(speakInstr(next.step), true); }
+      else if (dist <= now && !next.said.now) {
+        next.said.now = next.said.mid = next.said.far = 1;
+        if (next.step.stop) { reachedStop = Math.max(reachedStop, next.step.stop); say(`You've reached stop ${next.step.stop}, ${speakName(next.step.name)}.`, true); flash(`Stop ${next.step.stop} reached: ${next.step.name}`); }
+        else say(speakInstr(next.step), true);
+      }
+      // stops passed without the 'now' call (e.g. GPS gap) still count as reached
+      for (const m of man) if (m.step.stop && m.d < along - 30) reachedStop = Math.max(reachedStop, m.step.stop);
       showBanner(next.step, dist, remain);
-    } else showBanner(null, remain, remain);
+      junction(next, dist);
+    } else { showBanner(null, remain, remain); junction(null, remain); }
     // condition warnings ~1.5 km ahead
     for (const w of warn) { if (w.said) continue; const ahead = w.d - along; if (ahead < -50) { w.said = true; continue; } if (ahead <= 1500) { w.said = true; const txt = w.text.length > 160 ? w.text.slice(0, 157).replace(/\s\S*$/, '') + '…' : w.text; say(w.rule ? `Turn restriction ahead at ${speakName(w.road)}. ${txt}` : `Heads up. ${speakName(w.road)} has a condition. ${txt}`); flash(`${w.road}: ${w.text}`); } }
     // arrival
@@ -88,10 +95,44 @@ const NAV = (() => {
   async function reroute(pt) {
     rerouting = true; say('Off route. Finding a new legal route.', true); flash('Off route, rerouting on approved roads…');
     await new Promise(r => setTimeout(r, 30));
-    const r = opts.reroute(pt);
+    const r = opts.reroute(pt, reachedStop);
     rerouting = false; offCount = 0;
     if (r && !r.error) { prepare(r); opts.drawRoute(r); say(`New route. ${fmtKm(r.total).replace('km', 'kilometres')} to go.`); }
     else { say('Could not find a legal route from here. Head back to the approved route.'); flash('No legal route from here. Return to the approved route (blue line).'); }
+  }
+
+  // ---- next-turn junction diagram ----
+  function pointAt(d) { const L = R.line; d = Math.max(0, Math.min(cum[cum.length - 1], d)); let i = 1; while (i < cum.length - 1 && cum[i] < d) i++; const t = (d - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]); return [L[i - 1][0] + (L[i][0] - L[i - 1][0]) * t, L[i - 1][1] + (L[i][1] - L[i - 1][1]) * t]; }
+  function slice(d0, d1) { const L = R.line, out = [pointAt(d0)]; for (let i = 0; i < L.length; i++) if (cum[i] > d0 && cum[i] < d1) out.push(L[i]); out.push(pointAt(d1)); return out; }
+  function junction(m, dist) {
+    const box = ui.junc; if (!box) return;
+    const key = m ? m.d.toFixed(0) : 'end';
+    if (key !== jKey) { jKey = key; box.svg.innerHTML = m ? (m.step.stop ? stopSvg(m.step.stop) : junctionSvg(m)) : flagSvg(); }
+    box.dist.textContent = fmtKm(Math.max(0, dist));
+    box.bar.style.width = (100 * (1 - Math.min(dist, 1000) / 1000)).toFixed(0) + '%';
+    box.label.textContent = m ? (m.step.stop ? 'Stop ' + m.step.stop : m.step.instr.replace(/ onto$/, '').replace(/^At the roundabout, /, 'Roundabout: ')) : 'Destination';
+  }
+  const flagSvg = () => '<circle cx="0" cy="0" r="48" fill="#eef3ee"/><path d="M-10 30 V-30 M-10 -30 L22 -18 L-10 -6" stroke="#15803d" stroke-width="7" fill="none" stroke-linejoin="round" stroke-linecap="round"/>';
+  const stopSvg = n => `<circle cx="0" cy="0" r="48" fill="#fff7ed"/><path d="M0 34 C-4 18 -22 6 -22 -10 A22 22 0 0 1 22 -10 C22 6 4 18 0 34Z" fill="#d97706"/><text x="0" y="-4" text-anchor="middle" font-size="22" font-weight="700" fill="#fff" font-family="system-ui">${n}</text>`;
+  function junctionSvg(m) {
+    const c = m.step.at || pointAt(m.d), cx = kx(c[1]);
+    const back = pointAt(m.d - 40);
+    const bIn = Math.atan2((c[0] - back[0]) * cx, (c[1] - back[1]) * KY); // radians from north
+    const S = 0.42; // px per metre
+    const toXY = p => { const x = (p[0] - c[0]) * cx, y = (p[1] - c[1]) * KY; const r = bIn; const xr = x * Math.cos(r) - y * Math.sin(r), yr = x * Math.sin(r) + y * Math.cos(r); return [xr * S, -yr * S]; };
+    const path = pts => pts.map((p, i) => (i ? 'L' : 'M') + toXY(p).map(v => v.toFixed(1)).join(' ')).join(' ');
+    let side = '';
+    const G = opts.graph && opts.graph();
+    if (G) { // side roads at this junction
+      let bj = -1, bd = 35; for (let j = 0; j < G.J.length; j++) { const v = G.coords[G.J[j]]; if (Math.abs(v[1] - c[1]) > 0.0005 || Math.abs(v[0] - c[0]) > 0.0006) continue; const d = hav(v, c); if (d < bd) { bd = d; bj = j; } }
+      if (bj >= 0) for (const dd of G.out[bj]) { const e = G.E[dd >> 1]; const p = (dd & 1) ? e.path.slice().reverse() : e.path; const pts = [G.coords[p[0]]]; let acc = 0; for (let k = 1; k < p.length && acc < 170; k++) { acc += hav(G.coords[p[k - 1]], G.coords[p[k]]); pts.push(G.coords[p[k]]); } side += `<path d="${path(pts)}" stroke="#c4cad1" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`; }
+    }
+    const inPts = slice(m.d - 170, m.d), outPts = slice(m.d, m.d + 120);
+    const o = outPts.map(toXY); const a = o[o.length - 1], b = o[Math.max(0, o.length - 2)];
+    const ang = Math.atan2(a[1] - b[1], a[0] - b[0]); const tip = [a[0] + 9 * Math.cos(ang), a[1] + 9 * Math.sin(ang)];
+    const w1 = [a[0] + 11 * Math.cos(ang + 2.2), a[1] + 11 * Math.sin(ang + 2.2)], w2 = [a[0] + 11 * Math.cos(ang - 2.2), a[1] + 11 * Math.sin(ang - 2.2)];
+    const full = path(inPts.concat(outPts.slice(1)));
+    return `<rect x="-70" y="-70" width="140" height="140" fill="#f4f6f8"/>${side}<path d="${full}" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${full}" stroke="#0b62d6" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polygon points="${[tip, w1, w2].map(p => p.map(v => v.toFixed(1)).join(',')).join(' ')}" fill="#0b62d6" stroke="#fff" stroke-width="2"/><circle cx="0" cy="${(170 * S * 0.9).toFixed(0)}" r="0"/>`;
   }
 
   async function keepAwake() { try { if ('wakeLock' in navigator) { lock = await navigator.wakeLock.request('screen'); } } catch { } }
@@ -99,7 +140,7 @@ const NAV = (() => {
   function stopTracking() { if (watchId !== null) { try { navigator.geolocation.clearWatch(watchId); } catch { } watchId = null; } if (sim) { clearInterval(sim.t); sim = null; } }
 
   function start(route, o, demo) {
-    opts = o; ui = o.ui; map = o.map; endInfo = o.endInfo || null;
+    opts = o; ui = o.ui; map = o.map; endInfo = o.endInfo || null; reachedStop = 0; jKey = null;
     prepare(route); active = true; document.body.classList.add('driving');
     if (!posMarker) posMarker = L.circleMarker([route.line[0][1], route.line[0][0]], { radius: 9, color: '#fff', weight: 3, fillColor: '#0b62d6', fillOpacity: 1 }).addTo(map); else posMarker.addTo(map);
     keepAwake();
