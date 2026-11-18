@@ -39,7 +39,8 @@
     if (name === 'alerts') renderAlerts();
     if (name === 'stops') renderStops();
     if (name === 'profile') renderProfiles();
-    app.sheet = name;
+    const was = app.sheet; app.sheet = name;
+    if ((was === 'alerts') !== (name === 'alerts')) setTimeout(refreshAlertMarkers, 0);
   }
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => openSheet(null));
   document.querySelectorAll('.tab').forEach(t => t.onclick = () => { const k = t.dataset.tab; if (k === 'map') return openSheet(null); if (k === 'plan') return openSheet(app.RES && !app.RES.error && app.sheet !== 'plan' ? 'route' : 'plan'); openSheet(k); });
@@ -92,7 +93,7 @@
     updateGo(); refreshAlertMarkers();
   }
   const setPlanStatus = t => { $('planStatus').textContent = t; };
-  RR.on('profiles', () => { const id = RR.vehicles.active().id; if (app.RES && app.vehId && app.vehId !== id) { app.RES = null; RR.map.clearRoutes(); toast('Vehicle changed: plan the route again for this vehicle.'); } app.vehId = id; paintVehicle(); if (S.key !== RR.vehicles.active().net) loadNetwork(); else refreshAlertMarkers(); });
+  RR.on('profiles', () => { const id = RR.vehicles.active().id; if (app.RES && app.vehId && app.vehId !== id) { app.RES = null; RR.map.clearRoutes(); refreshAlertMarkers(); toast('Vehicle changed: plan the route again for this vehicle.'); } app.vehId = id; paintVehicle(); if (S.key !== RR.vehicles.active().net) loadNetwork(); else refreshAlertMarkers(); });
 
   // ---------- trip inputs ----------
   function setPoint(w, pt) {
@@ -296,22 +297,41 @@
     const counts = {}; list.forEach(a => counts[a.cat] = (counts[a.cat] || 0) + 1);
     $('alertCats').innerHTML = RR.alerts.CATS.map(c => `<button class="chip ${app.alertCat === c.key ? 'on' : ''}" data-cat="${c.key}">${c.label}<span class="n">${c.key === 'all' ? list.length : counts[c.key] || 0}</span></button>`).join('');
     const shown = list.filter(a => app.alertCat === 'all' || a.cat === app.alertCat).slice(0, 150);
+    app.alertShown = shown; setTimeout(refreshAlertMarkers, 0);
     $('alertList').innerHTML = shown.length ? shown.map((a, k) => { const cat = RR.alerts.CATS.find(c => c.key === a.cat) || {}; cat.icon = a.icon || cat.icon; const dist = a.along != null ? fmtKm(a.along) : a.dist != null ? fmtKm(a.dist) : ''; return `<li data-k="${k}"><span class="ico ${a.tone}">${RR.icon(cat.icon || 'alert')}</span><span class="tx"><b>${esc(a.title)}</b><small>${esc(a.status || cat.label)}${a.impact && a.impact !== a.status ? ' · ' + esc(a.impact) : ''}</small><small style="color:var(--dim)">${esc(a.source || '')}${a.updated ? ' · updated ' + esc(a.updated) : ''}</small></span><span class="km">${dist}</span></li>`; }).join('') : `<li><span class="tx"><b>Nothing here right now</b><small>No ${app.alertCat === 'all' ? '' : (RR.alerts.CATS.find(c => c.key === app.alertCat) || {}).label.toLowerCase() + ' '}alerts ${app.alertScope === 'route' ? 'on your route' : app.alertScope === 'near' ? 'within 100 km' : 'in WA'}.</small></span></li>`;
     $('alertNote').innerHTML = (app.liveFailed && app.liveAt ? `<b>No signal:</b> showing alerts from ${when(app.liveAt)}. They'll refresh when signal returns.<br>` : '') + 'Closures, incidents, flooding and roadworks are live from the Main Roads WA Travel Map. Low bridges, height and weight limits come from Main Roads structure and network data for your vehicle. For bushfire and emergency warnings check <a href="https://www.emergency.wa.gov.au" target="_blank" rel="noopener">Emergency WA</a>.';
     $('alertScope').querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { app.alertScope = b.dataset.sc; renderAlerts(); });
     $('alertCats').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { app.alertCat = b.dataset.cat; renderAlerts(); });
     $('alertList').querySelectorAll('[data-k]').forEach(li => li.onclick = () => { const a = shown[+li.dataset.k]; RR.map.get().setView([a.at[1], a.at[0]], 13); if (window.innerWidth < 900) openSheet(null); if (a.cat === 'report') reportPopup(a); });
   }
+  // which hazards appear on the map:
+  //  - Alerts screen open: exactly what the list shows
+  //  - a route planned: only hazards on/near it (and, while driving, only those still ahead)
+  //  - otherwise: closures, floods and fire within 50 km of you, plus nearby driver reports
+  //  - "Show all hazards" switch: everything, as before
+  function mapAlertSet(live, reps) {
+    const r = app.RES && !app.RES.error ? app.RES.routes[app.sel] : null;
+    const catOn = a => HAZ.find(h => h.cats.includes(a.cat) && haz[h.key]) || !HAZ.some(h => h.cats.includes(a.cat));
+    if (app.sheet === 'alerts' && app.alertShown) return app.alertShown;
+    if (haz.showAll) {
+      const z = RR.map.get().getZoom(), near = r ? alongIdx(r) : null;
+      const rules = RR.alerts.rules(RR.vehicles.active(), r).filter(a => (a.cat === 'lowbridge' || a.cat === 'weight') && (z >= 11 || (near && near(a.at) != null)));
+      return live.concat(rules, reps).filter(catOn);
+    }
+    if (r) {
+      const near = alongIdx(r), here = NAV.isActive() && navPos ? (near(navPos) ?? 0) : -1;
+      const rules = RR.alerts.rules(RR.vehicles.active(), r).filter(a => a.cat === 'lowbridge' || a.cat === 'weight' || a.cat === 'height');
+      const out = routeAlerts(r).concat(rules.map(a => { const d = near(a.at); return d == null ? null : { ...a, along: d }; }).filter(Boolean));
+      return out.filter(a => catOn(a) && (here < 0 || a.along >= here - 200));
+    }
+    const c = app.ME ? [app.ME.lon, app.ME.lat] : (m => [m.lng, m.lat])(RR.map.get().getCenter());
+    return live.filter(a => (a.cat === 'closure' || a.cat === 'flood' || a.cat === 'fire') && RAV.hav(c, a.at) < 50000).concat(reps.filter(a => RAV.hav(c, a.at) < 50000)).filter(catOn);
+  }
+  app.refreshMarkers = () => refreshAlertMarkers();
   function refreshAlertMarkers() {
     const live = RR.alerts.live(S.alerts);
-    const r = app.RES && !app.RES.error ? app.RES.routes[app.sel] : null;
-    const rules = RR.alerts.rules(RR.vehicles.active(), r).filter(a => a.cat === 'lowbridge' || a.cat === 'weight');
-    // keep the map calm: live alerts always, vehicle-specific low bridges/limits only when zoomed in or near the route
-    const z = RR.map.get().getZoom();
-    const near = r ? alongIdx(r) : null;
-    const extra = rules.filter(a => z >= 11 || (near && near(a.at) != null));
     const reps = RR.reports.asAlerts(app.reports || []);
-    const shown = live.concat(extra, reps).filter(a => HAZ.find(h => h.cats.includes(a.cat) && haz[h.key]) || !HAZ.some(h => h.cats.includes(a.cat)));
+    const shown = mapAlertSet(live, reps);
     RR.map.setAlerts(shown, a => { RR.map.get().setView([a.at[1], a.at[0]], 13); if (a.cat === 'report') reportPopup(a); else toast(`${a.title}: ${a.status || ''}`, 5000); });
     const n = live.filter(a => a.tone === 'red').length;
     $('alertBadge').hidden = !(live.length + reps.length); $('alertBadge').textContent = live.length + reps.length; $('tabAlertDot').hidden = !n;
@@ -362,9 +382,10 @@
     { key: 'structures', label: 'Low bridges & weight limits', sub: 'For your vehicle', icon: 'bridge', tone: 'amber', cats: ['lowbridge', 'height', 'weight'] },
     { key: 'report', label: 'Driver reports', sub: 'Hazards reported by drivers', icon: 'report', tone: 'lime', cats: ['report'] },
     { key: 'network', label: 'Approved network', sub: 'Roads your vehicle can use', icon: 'route', tone: 'lime', cats: [] },
-    { key: 'zones', label: 'Central Zones', sub: 'Perth and Fremantle oversize zones', icon: 'wide', tone: 'blue', cats: [] }
+    { key: 'zones', label: 'Central Zones', sub: 'Perth and Fremantle oversize zones', icon: 'wide', tone: 'blue', cats: [] },
+    { key: 'showAll', label: 'Show all hazards everywhere', sub: 'Off: the map only shows hazards on your route, in Alerts, or closures near you', icon: 'layers', tone: 'grey', cats: [] }
   ];
-  const haz = Object.assign(Object.fromEntries(HAZ.map(h => [h.key, true])), RR.store.get('haz', {}));
+  const haz = Object.assign(Object.fromEntries(HAZ.map(h => [h.key, h.key !== 'showAll'])), RR.store.get('haz', {}));
   function applyLayerToggles() {
     const m = RR.map.get(), net = RR.map.layer('net'), zl = RR.map.layer('zones');
     $('setNet').checked = haz.network; RR.map.drawNetwork(S.data, haz.network);
@@ -410,7 +431,7 @@
 
   // ---------- reporting ----------
   let repType = null, repDetailSel = '', repSide = 'mine', navPos = null;
-  RR.on('navpos', p => { navPos = p; checkReportsAhead(p); });
+  let lastMk = 0; RR.on('navpos', p => { navPos = p; checkReportsAhead(p); if (Date.now() - lastMk > 30000) { lastMk = Date.now(); refreshAlertMarkers(); } });
   const repTone = { red: '#F04444', amber: '#FFB020', blue: '#36A5F5', lime: '#B7F23D' };
   function reportPoint() {
     if (NAV.isActive() && navPos) return { at: navPos, how: 'your current position' };
