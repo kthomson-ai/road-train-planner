@@ -92,7 +92,7 @@
 <div class="app">
   <aside>
     <h1>WA Road Train Route Planner</h1>
-    <div class="sub">Prototype v0.6.2 (vehicle types, oversize rules, multi-stop, voice) · routes only on Main Roads WA approved RAV networks</div>
+    <div class="sub">Prototype v0.6.3 (vehicle types, oversize rules, multi-stop, voice) · routes only on Main Roads WA approved RAV networks</div>
 
     <label for="net">Vehicle / approved network</label>
     <select id="net">
@@ -305,8 +305,9 @@ async function localRoads(p) {
   for (const km of [6, 3, 1.5]) {
     const d = km / 111, dx = km / (111 * Math.cos(p[1] * Math.PI / 180));
     const env = `&geometry=${encodeURIComponent([p[0] - dx, p[1] - d, p[0] + dx, p[1] + d].join(','))}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects`;
-    const cnt = await fetch(`${ASSETS}16/query?where=${encodeURIComponent("ROAD_HIERARCHY = 'Access Road'")}&returnCountOnly=true&f=json${env}`).then(r => r.json()).then(j => j.count || 0).catch(() => 0);
-    if (cnt <= 6000 || km === 1.5) { feats = (await fetchLayer(16, 'ROAD,ROAD_NAME,NETWORK_TYPE,ROAD_HIERARCHY', null, ASSETS, "ROAD_HIERARCHY = 'Access Road'", env).catch(() => [])).filter(truckRoad); break; }
+    // full Main Roads road network (includes port and private-access roads the hierarchy layer leaves out)
+    const cnt = await fetch(`${ASSETS}17/query?where=1%3D1&returnCountOnly=true&f=json${env}`).then(r => r.json()).then(j => j.count || 0).catch(() => 0);
+    if (cnt <= 7000 || km === 1.5) { feats = (await fetchLayer(17, 'ROAD,ROAD_NAME,NETWORK_TYPE', null, ASSETS, '1=1', env).catch(() => [])).filter(truckRoad); feats.forEach(f => f.properties.ROAD_HIERARCHY = 'Access Road'); break; }
   }
   feats.forEach(x => x.properties._cond = false); LOCAL.set(k, feats); return feats;
 }
