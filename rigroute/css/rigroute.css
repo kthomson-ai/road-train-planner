@@ -319,3 +319,7 @@ body.driving #navbar { padding-right: 62px; }
 .ropt:not(.on) { display: flex; align-items: center; gap: 10px; padding: 9px 14px; margin-bottom: 6px; }
 .ropt:not(.on) .t { font-size: 16px; } .ropt:not(.on) .d { position: static; font-size: 13px; order: 3; margin-left: auto; }
 .ropt:not(.on) .lbl { margin: 0; flex: 1; min-width: 0; font-size: 13px; } .ropt:not(.on) .confbar { display: none; }
+/* Plan Route lives in the bottom toolbar; the floating button duplicated it */
+#planBtn { display: none !important; }
+/* phone: the vehicle chip is a compact reminder of which vehicle routes are planned for */
+@media (max-width: 899px) { .vchip { padding: 6px 10px; gap: 6px; } .vchip #vchipName { display: none; } .vchip #vchipSub { font-size: 13px; font-weight: 700; color: var(--text); } .vchip .vi { width: 26px; height: 26px; } }
