@@ -46,6 +46,11 @@ RR.routing = (() => {
     }
     if (n) r.notes.push({ kind: 'bridge', text: `Avoiding ${n} bridge${n > 1 ? 's' : ''} Main Roads lists as not to be crossed by this network or mass.${unk ? ' No total mass entered, so mass-limited bridges are treated as closed to you.' : ''}` });
   }
+  function blockClosures(G, r) {
+    let closed = 0;
+    for (const a of closuresBlocking()) { const lines = a.geom.type === 'MultiLineString' ? a.geom.coordinates : a.geom.type === 'LineString' ? [a.geom.coordinates] : [[a.geom.coordinates]]; for (const L of lines) for (let i = 0; i < L.length; i += Math.max(1, Math.floor(L.length / 40))) for (const { ei } of RAV.nearEdges(G, L[i], 30)) { if (!r.blocked.has(ei)) closed++; r.blocked.add(ei); } }
+    if (closed) r.notes.push({ kind: 'closure', text: 'Avoiding roads currently closed (Main Roads live data).' });
+  }
   function restrictions(G, profile, pts, prefs) {
     const dims = RR.vehicles.dims(profile);
     const zones = C.zones.filter(z => !pts.some(p => RAV.inPoly(p, z.poly)));
@@ -56,9 +61,7 @@ RR.routing = (() => {
     // placarded dangerous goods: Northbridge Tunnel
     if (profile.dg) { const b = C.dgTunnel.box; let n = 0; G.E.forEach((e, ei) => { const m = G.coords[e.path[Math.floor(e.path.length / 2)]]; if (m[0] > b[0] && m[0] < b[2] && m[1] > b[1] && m[1] < b[3] && C.dgTunnel.road.test(RAV.edgeName(G, ei))) { r.blocked.add(ei); n++; } }); if (n) r.notes.push({ kind: 'dg', text: 'Placarded dangerous goods: avoiding the Northbridge Tunnel (Graham Farmer Freeway).' }); }
     // live road closures
-    let closed = 0;
-    for (const a of closuresBlocking()) { const lines = a.geom.type === 'MultiLineString' ? a.geom.coordinates : a.geom.type === 'LineString' ? [a.geom.coordinates] : [[a.geom.coordinates]]; for (const L of lines) for (let i = 0; i < L.length; i += Math.max(1, Math.floor(L.length / 40))) for (const { ei } of RAV.nearEdges(G, L[i], 30)) { if (!r.blocked.has(ei)) closed++; r.blocked.add(ei); } }
-    if (closed) r.notes.push({ kind: 'closure', text: 'Avoiding roads currently closed (Main Roads live data).' });
+    blockClosures(G, r);
     // preferences as soft penalties
     const pen = new Map();
     if (prefs.avoidUnsealed || prefs.preferHighways) G.E.forEach((e, ei) => { const f = e.f >= 0 ? G.feats[e.f] : null; if (!f) return; let m = 1; if (prefs.avoidUnsealed && (f.unsealed || /unsealed/i.test(f.name))) m *= 4; if (prefs.preferHighways && !f.state && !(f.speed >= 80)) m *= 1.3; if (m > 1) pen.set(ei, m); });
@@ -140,38 +143,92 @@ RR.routing = (() => {
     const G = RAV.build(data.lines, data.ints, data.br); const out = { G, data }; G2cache.set(key, out); return out;
   }
   function mergeConf(c1, c2) { const seg = {}; for (const k of Object.keys(c1.seg)) seg[k] = c1.seg[k] + (c2.seg[k] || 0); return { seg, parts: c1.parts.concat(c2.parts), gaps: c1.gaps.concat(c2.gaps) }; }
-  async function planSwap({ pts, labels, profile, profile2, prefs = {}, onStatus }) {
-    if (pts.length !== 2 || !profile2) return null;
-    const rtaas = state.facilities.filter(f => f.kind === 'rtaa');
-    if (!rtaas.length) return null;
+  // A swap trip is a chain of segments, each driven as vehicle 1 (the full combination, on its network) or
+  // vehicle 2 (the broken-down vehicle, on its network). Stops between segments are the drop-off, the delivery
+  // and the hook-up. `ret`: 'none' = finish at the delivery; 'rtaa' = come back and hook up; 'start' = then return to the start.
+  const SWAP_MIN = 30; // minutes allowed to drop or hook up trailers
+  let swapCtx = null;
+  async function swapContext(profile, profile2, pts, prefs, onStatus) {
     const G1 = state.base, { G: G2, data: d2 } = await graphForKey(profile2.net, onStatus);
-    onStatus && onStatus('Checking road train assembly areas…'); await new Promise(r => setTimeout(r, 10));
     const r1 = restrictions(G1, profile, pts, prefs);
     const dims2 = RR.vehicles.dims(profile2), zones = C.zones.filter(z => !pts.some(p => RAV.inPoly(p, z.poly)));
     const r2 = RAV.restrictions(G2, dims2, { structures: state.structures, zones, allZones: C.zones, prohibited: d2.prohibited || [] });
-    blockBridges(G2, d2, dims2.mass, r2);
+    blockBridges(G2, d2, dims2.mass, r2); if (prefs.closures !== false) blockClosures(G2, r2);
+    swapCtx = { G1, G2, r1, r2, profile, profile2, dims2, pts, prefs };
+    return swapCtx;
+  }
+  function swapSegs(a, b, f, labels, profile2, ret) {
+    const segs = [
+      { to: f.at, label: f.name, veh: 1, arrive: `${f.name}: drop trailers, continue as ${profile2.name}`, wait: SWAP_MIN },
+      { to: b, label: labels[1], veh: 2, arrive: ret === 'none' ? null : `${labels[1].split(',')[0]}: deliver, then return for the trailers`, wait: 0 }
+    ];
+    if (ret !== 'none') segs.push({ to: f.at, label: f.name, veh: 2, arrive: ret === 'start' ? `${f.name}: hook up trailers, continue as the full combination` : null, wait: ret === 'start' ? SWAP_MIN : 0 });
+    if (ret === 'start') segs.push({ to: a, label: labels[0], veh: 1, arrive: null, wait: 0 });
+    return segs;
+  }
+  // route a chain of segments from `from`; stop numbers start at firstStopNo
+  function chainSwap(from, fromLabel, segs, firstStopNo) {
+    const X = swapCtx, legs = []; let p = from, pl = fromLabel;
+    for (const sg of segs) {
+      const G = sg.veh === 1 ? X.G1 : X.G2, rr = sg.veh === 1 ? X.r1 : X.r2;
+      const leg = RAV.routeVia(G, [p, sg.to], [pl, sg.label], 1, { blocked: rr.blocked, slow: rr.slow, pen: sg.veh === 1 ? rr.pen : undefined });
+      if (leg.error) return { error: `${sg.veh === 1 ? X.profile.name : X.profile2.name} to ${sg.label.split(',')[0]}: ${leg.error}` };
+      legs.push({ leg, sg, G }); p = sg.to; pl = sg.label;
+    }
+    const r = { line: [], steps: [], total: 0, secs: 0, legs2: [], conditions: [], rulesNear: [], bridgesNear: [], tight: [] };
+    let conf = null;
+    legs.forEach(({ leg, sg, G }, i) => {
+      r.line.push(...(i ? leg.line.slice(1) : leg.line));
+      leg.steps.forEach(st => r.steps.push(i ? { ...st, instr: st.instr.replace(/^Start on/, 'Leave on') } : { ...st }));
+      if (i < legs.length - 1) r.steps.push({ instr: `Arrive at stop ${firstStopNo + i}:`, name: sg.arrive || sg.label, len: 0, at: sg.to, pts: [sg.to], stop: firstStopNo + i });
+      r.total += leg.total; r.secs += leg.secs + sg.wait * 60;
+      r.legs2.push(...leg.legs2); r.conditions.push(...leg.conditions); r.rulesNear.push(...leg.rulesNear); r.bridgesNear.push(...(leg.bridgesNear || []));
+      r.tight.push(...RAV.tightStructures(leg.line, { structures: state.structures }, sg.veh === 1 ? RR.vehicles.dims(X.profile).height : X.dims2.height));
+      const c = confidence(G, { ...leg, s: i === 0 ? leg.s : { d: 0 }, t: i === legs.length - 1 ? leg.t : { d: 0 } });
+      conf = conf ? mergeConf(conf, c) : c;
+    });
+    r.joinGap = Math.max(0, ...legs.flatMap(({ leg }, i) => [i < legs.length - 1 ? leg.t.d : 0, i > 0 ? leg.s.d : 0]));
+    r.s = legs[0].leg.s; r.t = legs[legs.length - 1].leg.t; r.conf = conf;
+    r.along = alongRoute(r); r.zones = RAV.zonesOnRoute(r.line, C.zones); r.metro = r.line.some(C.metro);
+    return r;
+  }
+  async function planSwap({ pts, labels, profile, profile2, prefs = {}, ret = 'none', onStatus }) {
+    if (pts.length !== 2 || !profile2) return null;
+    const rtaas = state.facilities.filter(f => f.kind === 'rtaa'); if (!rtaas.length) return null;
+    await swapContext(profile, profile2, pts, prefs, onStatus);
+    onStatus && onStatus('Checking road train assembly areas…'); await new Promise(r => setTimeout(r, 10));
     const [a, b] = pts, direct = hav(a, b);
     const cands = rtaas.map(f => ({ f, score: hav(a, f.at) + hav(f.at, b) })).filter(x => x.score < direct * 1.6 + 30000).sort((x, y) => x.score - y.score).slice(0, 8);
     let best = null;
     for (const { f } of cands) {
-      const leg1 = RAV.routeVia(G1, [a, f.at], [labels[0], f.name], 1, { blocked: r1.blocked, slow: r1.slow, pen: r1.pen });
-      if (leg1.error || leg1.t.d > 400) continue;
-      const leg2 = RAV.routeVia(G2, [f.at, b], [f.name, labels[1]], 1, { blocked: r2.blocked, slow: r2.slow });
-      if (leg2.error || leg2.s.d > 400) continue;
-      const secs = leg1.secs + leg2.secs + 30 * 60; // allow ~30 min to drop trailers
-      if (!best || secs < best.secs) best = { f, leg1, leg2, secs };
+      const out = chainSwap(a, labels[0], swapSegs(a, b, f, labels, profile2, 'none'), 1);
+      if (out.error || out.legs2.length < 2) continue;
+      if (out.joinGap > 400) continue; // both vehicles must actually be able to reach the assembly area
+      if (!best || out.secs < best.secs) best = { f, secs: out.secs };
     }
     if (!best) return null;
-    const { f, leg1, leg2 } = best;
-    const steps = leg1.steps.concat([{ instr: 'Arrive at stop 1:', name: `${f.name}: drop trailers, continue as ${profile2.name}`, len: 0, at: f.at, pts: [f.at], stop: 1 }], leg2.steps.map(s => ({ ...s, instr: s.instr.replace(/^Start on/, 'Leave on') })));
-    const r = { line: leg1.line.concat(leg2.line.slice(1)), steps, total: leg1.total + leg2.total, secs: leg1.secs + leg2.secs + 30 * 60, s: leg1.s, t: leg2.t,
-      legs2: leg1.legs2.concat(leg2.legs2), conditions: leg1.conditions.concat(leg2.conditions), rulesNear: leg1.rulesNear.concat(leg2.rulesNear), bridgesNear: (leg1.bridgesNear || []).concat(leg2.bridgesNear || []),
-      swap: { at: f.at, name: f.name, to: profile2.name, net2: profile2.net } };
-    r.conf = mergeConf(confidence(G1, { ...leg1, s: leg1.s, t: { d: 0 } }), confidence(G2, { ...leg2, s: { d: 0 }, t: leg2.t }));
-    r.along = alongRoute(r); r.tight = RAV.tightStructures(leg1.line, { structures: state.structures }, RR.vehicles.dims(profile).height).concat(RAV.tightStructures(leg2.line, { structures: state.structures }, dims2.height));
-    r.zones = RAV.zonesOnRoute(leg2.line, C.zones); r.metro = r.line.some(C.metro);
-    r.label = `Swap at ${f.name.replace(/road train assembly area/i, 'RTAA')}`;
+    const f = best.f, segs = swapSegs(a, b, f, labels, profile2, ret);
+    const r = chainSwap(a, labels[0], segs, 1); if (r.error) return null;
+    return finishSwap(r, segs, { f, labels, pts, profile2, ret }, 0);
+  }
+  function finishSwap(r, allSegs, meta, done) {
+    const { f, labels, pts, profile2, ret } = meta;
+    r.swap = { at: f.at, name: f.name, to: profile2.name, net2: profile2.net, ret, done, dest: { pt: pts[1], label: labels[1] }, waits: allSegs.slice(done).reduce((n, sg) => n + sg.wait, 0), meta };
+    r.allSegs = allSegs;
+    r.run = { ids: [], pts: [pts[0], ...allSegs.map(sg => sg.to)], labels: [labels[0], ...allSegs.map(sg => sg.label)] };
+    const short = f.name.replace(/road train assembly area/i, 'RTAA');
+    r.label = ret === 'none' ? `Swap at ${short}` : ret === 'rtaa' ? `Swap at ${short}, return for trailers` : `Swap at ${short}, round trip`;
     return r;
   }
-  return { state, prepare, plan, reroute, alongRoute, closuresBlocking, restrictions, planSwap, bridgeRule };
+  // reroute a swap trip from the current position; `reached` = stops already passed
+  function rerouteSwap(route, pos, reached, refreshClosures) {
+    if (!swapCtx || !route.allSegs) return { error: 'Swap details are no longer loaded. Plan the trip again.' };
+    if (refreshClosures) { swapCtx.r1 = restrictions(swapCtx.G1, swapCtx.profile, swapCtx.pts, swapCtx.prefs); blockClosures(swapCtx.G2, swapCtx.r2); }
+    const rest = route.allSegs.slice(reached); if (!rest.length) return { error: 'Trip already complete.' };
+    const r = chainSwap(pos, 'Current position', rest, reached + 1); if (r.error) return r;
+    return finishSwap(r, route.allSegs, route.swap.meta, reached);
+  }
+  // which vehicle the driver is in after passing `reached` stops
+  const swapVehicle = (route, reached) => (route.allSegs[Math.min(reached, route.allSegs.length - 1)] || {}).veh === 2 ? swapCtx && swapCtx.profile2 : swapCtx && swapCtx.profile;
+  return { state, prepare, plan, reroute, alongRoute, closuresBlocking, restrictions, planSwap, rerouteSwap, swapVehicle, bridgeRule };
 })();

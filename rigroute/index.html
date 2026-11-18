@@ -9,22 +9,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="img/favicon-64.png?v=21">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=21">
+<link rel="icon" href="img/favicon-64.png?v=22">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=22">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="js/vendor/leaflet.css">
-<link rel="stylesheet" href="css/rigroute.css?v=21">
+<link rel="stylesheet" href="css/rigroute.css?v=22">
 </head>
 <body>
-<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=21" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
+<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=22" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
 
 <div id="map" aria-label="Map"></div>
 
 <!-- top: search + vehicle -->
 <div class="topbar">
   <div class="search">
-    <img src="img/logo-mark.png?v=21" alt="RigRoute">
+    <img src="img/logo-mark.png?v=22" alt="RigRoute">
     <input id="q" type="search" placeholder="Where to?" autocomplete="off" enterkeyhint="search" aria-label="Search destination">
     <button class="vchip" id="vchip" aria-label="Change vehicle"><span class="vi" data-icon="truck"></span><div><b id="vchipName">Vehicle</b><small id="vchipSub"></small></div></button>
   </div>
@@ -74,6 +74,7 @@
         <div><label class="lab" for="pLeave">Leaving</label><input class="inp" id="pLeave" type="datetime-local"><div class="hint" style="margin-top:4px">Blank = now. Used for curfews and time limits.</div></div>
         <div id="pFuelWrap"><label class="lab" for="pFuel">Fuel now <b id="pFuelVal">100%</b></label><input id="pFuel" type="range" min="5" max="100" step="5" value="100" style="width:100%;accent-color:var(--lime);margin-top:12px"><div class="hint" id="pFuelHint" style="margin-top:4px"></div></div>
       </div>
+      <div id="swapRetWrap" style="margin-top:10px" hidden><label class="lab" for="swapRet">If trailers are dropped at an assembly area</label><select class="inp" id="swapRet"><option value="none">Finish at the delivery</option><option value="rtaa">Come back and hook up the trailers</option><option value="start">Hook up, then return to the start</option></select></div>
       <div id="planPermitPick" style="margin-top:10px"></div>
     </div>
     <div class="card">
@@ -286,7 +287,7 @@
 <div id="netpill" hidden><span data-icon="alert"></span><span id="netText">No signal: navigation still works</span></div>
 <div id="disclaimer" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="dcTitle">
   <div class="mbox">
-    <img src="img/logo-pin.png?v=21" alt="" style="width:56px;height:56px">
+    <img src="img/logo-pin.png?v=22" alt="" style="width:56px;height:56px">
     <h2 id="dcTitle">Before you drive</h2>
     <p>RigRoute is a <b>planning aid</b>. It uses Main Roads WA network and live data, but data can be incomplete or out of date.</p>
     <ul>
@@ -304,22 +305,22 @@
 
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/Leaflet.GoogleMutant.js"></script>
-<script src="js/core.js?v=21"></script>
-<script src="js/nav.js?v=21"></script>
-<script src="js/services/config.js?v=21"></script>
-<script src="js/services/store.js?v=21"></script>
-<script src="js/services/mainroads.js?v=21"></script>
-<script src="js/services/google.js?v=21"></script>
-<script src="js/services/vehicles.js?v=21"></script>
-<script src="js/services/routing.js?v=21"></script>
-<script src="js/services/trip.js?v=21"></script>
-<script src="js/services/shared.js?v=21"></script>
-<script src="js/services/places.js?v=21"></script>
-<script src="js/services/alerts.js?v=21"></script>
-<script src="js/services/reports.js?v=21"></script>
-<script src="js/ui/icons.js?v=21"></script>
-<script src="js/ui/theme.js?v=21"></script>
-<script src="js/ui/map.js?v=21"></script>
-<script src="js/ui/app.js?v=21"></script>
+<script src="js/core.js?v=22"></script>
+<script src="js/nav.js?v=22"></script>
+<script src="js/services/config.js?v=22"></script>
+<script src="js/services/store.js?v=22"></script>
+<script src="js/services/mainroads.js?v=22"></script>
+<script src="js/services/google.js?v=22"></script>
+<script src="js/services/vehicles.js?v=22"></script>
+<script src="js/services/routing.js?v=22"></script>
+<script src="js/services/trip.js?v=22"></script>
+<script src="js/services/shared.js?v=22"></script>
+<script src="js/services/places.js?v=22"></script>
+<script src="js/services/alerts.js?v=22"></script>
+<script src="js/services/reports.js?v=22"></script>
+<script src="js/ui/icons.js?v=22"></script>
+<script src="js/ui/theme.js?v=22"></script>
+<script src="js/ui/map.js?v=22"></script>
+<script src="js/ui/app.js?v=22"></script>
 </body>
 </html>

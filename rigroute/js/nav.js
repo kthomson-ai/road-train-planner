@@ -37,15 +37,27 @@ const NAV = (() => {
     for (const c of route.conditions) { if (!c.at) continue; const a = alongOf(c.at); const key = c.road; if (seen.has(key + '|' + Math.round(a / 2000))) continue; seen.add(key + '|' + Math.round(a / 2000)); warn.push({ d: a, text: c.text, road: c.road, said: false, hard: c.notThrough }); }
     for (const r of route.rulesNear || []) warn.push({ d: alongOf(r.at), text: r.text, road: r.where || 'intersection', said: false, rule: true });
     warn.sort((a, b) => a.d - b.d);
-    lastIdx = 0; offCount = 0; arrived = false;
+    lastIdx = 0; lastAlong = 0; prevPt = null; travel = null; offCount = 0; arrived = false;
   }
   function alongOf(pt) { const L = R.line; let best = 1e18, bi = 0, bt = 0; for (let i = 1; i < L.length; i++) { const p = proj(pt, L[i - 1], L[i]); if (p.d < best) { best = p.d; bi = i; bt = p.t; } } return cum[bi - 1] + bt * (cum[bi] - cum[bi - 1]); }
-  function locate(pt) { // search near last index first
-    const L = R.line; let best = 1e18, bi = lastIdx || 1, bt = 0;
-    const lo = Math.max(1, lastIdx - 30), hi = Math.min(L.length - 1, lastIdx + 400);
-    for (let i = lo; i <= hi; i++) { const p = proj(pt, L[i - 1], L[i]); if (p.d < best) { best = p.d; bi = i; bt = p.t; } }
-    if (best > 150) for (let i = 1; i < L.length; i++) { const p = proj(pt, L[i - 1], L[i]); if (p.d < best) { best = p.d; bi = i; bt = p.t; } }
-    lastIdx = bi; return { off: best, along: cum[bi - 1] + bt * (cum[bi] - cum[bi - 1]) };
+  // Match the GPS position to the route. Routes can overlap themselves (out and back along the same road), so
+  // prefer the stretch just ahead of where we were, and the pass that runs in our direction of travel.
+  let lastAlong = 0, prevPt = null, travel = null;
+  function locate(pt) {
+    const L = R.line;
+    if (prevPt) { const dx = (pt[0] - prevPt[0]) * Math.cos(pt[1] * Math.PI / 180), dy = pt[1] - prevPt[1]; if (Math.hypot(dx, dy) * 111320 > 8) { travel = [dx, dy]; prevPt = pt; } } else prevPt = pt;
+    const score = (i, p) => {
+      let pen = 0; const a = cum[i - 1];
+      if (a < lastAlong - 250 || a > lastAlong + 800) pen += 40;            // not where we expect to be
+      if (travel) { const sx = (L[i][0] - L[i - 1][0]) * Math.cos(pt[1] * Math.PI / 180), sy = L[i][1] - L[i - 1][1]; if (sx * travel[0] + sy * travel[1] < 0) pen += 80; } // runs against our travel
+      return p.d + pen;
+    };
+    let best = 1e18, bd = 1e18, bi = lastIdx || 1, bt = 0;
+    const scan = (lo, hi) => { for (let i = lo; i <= hi; i++) { const p = proj(pt, L[i - 1], L[i]); const sc = score(i, p); if (sc < best) { best = sc; bd = p.d; bi = i; bt = p.t; } } };
+    scan(Math.max(1, lastIdx - 30), Math.min(L.length - 1, lastIdx + 400));
+    if (bd > 150) scan(1, L.length - 1);
+    lastIdx = bi; lastAlong = cum[bi - 1] + bt * (cum[bi] - cum[bi - 1]);
+    return { off: bd, along: lastAlong };
   }
 
   const fmtKm = m => m < 950 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(m < 20000 ? 1 : 0) + ' km';
@@ -165,7 +177,7 @@ const NAV = (() => {
   function stop() { active = false; stopTracking(); try { speechSynthesis.cancel(); } catch { } try { lock && lock.release(); } catch { } lock = null; document.body.classList.remove('driving'); if (posMarker) map.removeLayer(posMarker); }
   function setMuted(m) { muted = m; if (m) try { speechSynthesis.cancel(); } catch { } }
   // test hook
-  return { start, stop, setMuted, setVoice, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
+  return { start, stop, setMuted, setVoice, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
 })();
 
 // ---- voice input for address boxes ----

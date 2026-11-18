@@ -203,18 +203,18 @@
     const breakTo = RR.vehicles.all().find(x => x.id === prof.breakTo);
     const needsSwap = res.error || res.routes.every(r => r.conf.gaps.some(g => g.d > 1000));
     if (breakTo && needsSwap) {
-      try { const sw = await RR.routing.planSwap({ pts: run.pts, labels: run.labels, profile: prof, profile2: breakTo, prefs, onStatus: setPlanStatus }); if (sw) { sw.idx = res.error ? 0 : res.routes.length; res = res.error ? { routes: [sw], restr: { notes: [] } } : { ...res, routes: [sw, ...res.routes] }; res.routes.forEach((r, i) => r.idx = i); } } catch (e) { console.warn('swap', e); }
+      try { const sw = await RR.routing.planSwap({ pts: run.pts, labels: run.labels, profile: prof, profile2: breakTo, prefs: { ...prefs, closures: $('prefClosures').checked }, ret: $('swapRet').value, onStatus: setPlanStatus }); if (sw) { sw.idx = res.error ? 0 : res.routes.length; res = res.error ? { routes: [sw], restr: { notes: [] } } : { ...res, routes: [sw, ...res.routes] }; res.routes.forEach((r, i) => r.idx = i); } } catch (e) { console.warn('swap', e); }
     }
     S.alerts = keepAlerts; $('go').disabled = false; setPlanStatus('');
     app.LEAVE = $('pLeave').value ? new Date($('pLeave').value) : new Date(); app.FUEL = +$('pFuel').value;
     app.PERMIT = RR.permits.all().find(x => x.id === ($('pmPick') || {}).value) || null;
-    app.RUN = run; app.PROF = prof; app.PREFS = { ...prefs, closures: $('prefClosures').checked }; app.RES = res; app.sel = 0; app.vehId = RR.vehicles.active().id;
+    app.RUN = run; app.RUN0 = run; app.PROF = prof; app.PREFS = { ...prefs, closures: $('prefClosures').checked }; app.RES = res; app.sel = 0; app.vehId = RR.vehicles.active().id;
     if (res.error) { setPlanStatus(''); openSheet('route'); $('routeTitle').textContent = 'No legal route'; $('routeBody').innerHTML = `<div class="card" style="border-color:rgba(240,68,68,.4)"><b>No legal route found</b><p class="hint">${esc(res.error)}</p><p class="hint">The points may be on parts of the network that don't connect for this vehicle, or the height, width, length or closure rules block every way through. Check the vehicle and load, try a nearby place, or pick a higher network only if you're approved for it.</p></div>`; RR.map.clearRoutes(); return; }
-    res.routes.forEach(r => r.conf.gaps.forEach(g => { if (g.req) return; const i = [r.s, ...(r.legs2 || []).slice(0, -1).map(l => l.t), r.t].indexOf(g); g.req = run.pts[i >= 0 ? i : (g === r.t ? run.pts.length - 1 : 0)]; }));
+    res.routes.forEach(r => r.conf.gaps.forEach(g => { if (g.req) return; const rp = (r.run || run).pts; if (r.run) { g.req = g === r.t ? rp[rp.length - 1] : rp[0]; return; } const i = [r.s, ...(r.legs2 || []).slice(0, -1).map(l => l.t), r.t].indexOf(g); g.req = rp[i >= 0 ? i : (g === r.t ? rp.length - 1 : 0)]; }));
     showRoute(0, true);
   };
   function showRoute(i, fit) {
-    app.sel = i; const res = app.RES, r = res.routes[i];
+    app.sel = i; const res = app.RES, r = res.routes[i]; app.RUN = r.run || app.RUN0 || app.RUN;
     const b = RR.map.drawRoutes(res.routes, i, k => showRoute(k));
     if (fit && b) { const m = RR.map.get(); const pad = window.innerWidth < 900 ? { paddingTopLeft: [30, 90], paddingBottomRight: [30, window.innerHeight * 0.5] } : { paddingTopLeft: [470, 90], paddingBottomRight: [80, 90] }; m.fitBounds(b, pad); }
     renderRoute(r); openSheet('route'); refreshAlertMarkers();
@@ -222,25 +222,27 @@
 
   // ---------- route details ----------
   function confBar(c) { const tot = Object.values(c.seg).reduce((a, b) => a + b, 0) || 1; const col = { confirmed: '#B7F23D', general: '#7FA83A', conditional: '#FFB020', unverified: '#F04444' }; return `<div class="confbar">${Object.entries(c.seg).filter(([, v]) => v > 0).map(([k, v]) => `<i style="width:${(100 * v / tot).toFixed(1)}%;background:${col[k]}" title="${k}"></i>`).join('')}</div>`; }
+  // where the load is going (on a swap round trip the run ends back at the assembly area or the start)
+  const destOf = r => r && r.swap ? r.swap.dest : { pt: app.RUN.pts[app.RUN.pts.length - 1], label: app.RUN.labels[app.RUN.labels.length - 1] };
   function renderRoute(r) {
     const res = app.RES, prof = app.PROF, p = RR.vehicles.permit(prof);
-    $('routeTitle').textContent = `To ${app.RUN.labels[app.RUN.labels.length - 1].split(',')[0]}`;
+    $('routeTitle').textContent = `To ${destOf(r).label.split(',')[0]}`;
     let h = '';
     res.routes.forEach((x, i) => { h += `<div class="ropt ${i === app.sel ? 'on' : ''}" data-r="${i}"><div class="t">${fmtT(x.trueSecs || x.secs)}</div><div class="d">${fmtKm(x.total)}</div><div class="lbl"><b>${esc(x.label)}</b>${(n => n ? `<span class="tag" style="color:var(--amber)">${n} alert${n > 1 ? 's' : ''}</span>` : '')(routeAlerts(x).length)}${x.conf.gaps.length ? '<span class="tag" style="color:var(--red)">Off-network leg</span>' : ''}</div>${confBar(x.conf)}</div>`; });
     const legendHtml = `<div class="legend" style="margin:10px 0 6px"><span><i class="sw" style="background:#B7F23D"></i>Confirmed access</span>${S.data.general ? '<span><i class="sw" style="background:#7FA83A"></i>General access street</span>' : ''}<span><i class="sw" style="background:#FFB020"></i>With conditions</span><span><i class="sw" style="background:#F04444"></i>Not verified</span></div>`;
     const tc = RR.trip.timeChecks(r, app.LEAVE || new Date(), prof, pt => alongIdx(r)(pt));
-    h += `<div class="dataage" style="margin-top:-4px"><i style="background:var(--blue)"></i><span>Leave ${RR.trip.hhmm(app.LEAVE || new Date())}, arrive about <b>${RR.trip.hhmm(tc.arrive)}</b>${tc.arrive.toDateString() !== (app.LEAVE || new Date()).toDateString() ? ' ' + tc.arrive.toLocaleDateString('en-AU', { weekday: 'short' }) : ''}${r.swap ? ' (includes ~30 min to drop trailers)' : ''}</span></div>`;
+    h += `<div class="dataage" style="margin-top:-4px"><i style="background:var(--blue)"></i><span>Leave ${RR.trip.hhmm(app.LEAVE || new Date())}, arrive about <b>${RR.trip.hhmm(tc.arrive)}</b>${tc.arrive.toDateString() !== (app.LEAVE || new Date()).toDateString() ? ' ' + tc.arrive.toLocaleDateString('en-AU', { weekday: 'short' }) : ''}${r.swap ? ` (includes ${r.swap.waits} min to drop${r.swap.ret === 'start' ? ' and hook up' : ''} trailers)` : ''}</span></div>`;
     h += `<div class="drivebar" style="position:static;margin:0 0 12px;padding:0;background:none"><button class="btn primary big" id="startDrive" style="flex:1">${RR.icon('play')}Start</button><button class="btn big" id="demoDrive">Demo</button></div>`;
     const ageHtml = `<div class="dataage" id="routeAge" style="margin:0"><i></i><span>Checking Main Roads data…</span></div>`;
     const btnsHtml = `<div class="rbtns" style="margin:4px 0 10px"><button class="btn" id="rShare">${RR.icon('copy')}Share ETA</button><button class="btn" id="rSite">${RR.icon('pin')}Save destination</button></div>`;
-    const destPt = app.RUN.pts[app.RUN.pts.length - 1], site = RR.shared.siteNear(destPt, 400);
+    const destPt = destOf(r).pt, site = RR.shared.siteNear(destPt, 400);
     const siteHtml = !site ? '' : `<div class="card" style="border-color:rgba(54,165,245,.45)"><h3>${RR.icon('pin')} Site notes: ${esc(site.name)}</h3><p style="margin:0;white-space:pre-wrap">${esc(site.notes || 'No notes yet.')}</p><div class="hint">Shared by RigRoute testers. Updated ${new Date(site.updated).toLocaleDateString('en-AU')}.</div></div>`;
     const timingHtml = !tc.issues.length ? '' : `<div class="card" style="border-color:rgba(255,176,32,.5)"><h3>${RR.icon('alert')} Timing for this departure</h3><ul class="alist">${tc.issues.map(i => `<li><span class="ico amber">${RR.icon('alert')}</span><span class="tx"><b>${esc(i.title)}</b><small>${esc(i.text)}</small></span></li>`).join('')}</ul></div>`;
     let pc = null, savedPermitHtml = ''; if (app.PERMIT) { pc = RR.trip.permitCheck(r, app.PERMIT, app.LEAVE || new Date(), tc.arrive); savedPermitHtml = `<div class="card" style="border-color:${pc.ok ? 'rgba(183,242,61,.4)' : 'rgba(240,68,68,.5)'}"><h3>${RR.icon(pc.ok ? 'check' : 'alert')} Permit: ${esc(app.PERMIT.name)}${app.PERMIT.number ? ' (' + esc(app.PERMIT.number) + ')' : ''}</h3><ul class="alist">${pc.items.map(i => `<li><span class="ico ${i.bad ? 'red' : 'lime'}">${RR.icon(i.bad ? 'alert' : 'check')}</span><span class="tx"><small style="color:var(--text);font-size:13.5px">${esc(i.text)}</small></span></li>`).join('')}</ul>${app.PERMIT.fileName ? `<button class="btn block" id="rPermitFile">${RR.icon('copy')}Open permit document</button>` : ''}</div>`; }
     // access basis
     const basis = p.level === 'permit' ? ['red', 'Permit-dependent access', 'This trip is only legal under the permit noted above, on the route it specifies.'] : S.data.general ? ['lime', 'General access roads', 'Uses public roads open to general access vehicles, avoiding the Network 1 prohibited list.'] : ['lime', `Confirmed on ${RR.net(prof.net).short}`, `Every section is on the Main Roads ${RR.net(prof.net).label} (with conditions where marked).`];
     const items = [[basis[0], 'check', basis[1], basis[2]]];
-    if (r.swap) items.unshift(['blue', 'truck', `Drop trailers at ${r.swap.name}`, `This combination can't reach the destination on its network. Drive to the assembly area, then continue as ${r.swap.to} on ${RR.net(r.swap.net2).short}.`]);
+    if (r.swap) items.unshift(['blue', 'truck', `Drop trailers at ${r.swap.name}`, `This combination can't reach the destination on its network. Drive to the assembly area and drop trailers, deliver as ${r.swap.to} on ${RR.net(r.swap.net2).short}${r.swap.ret === 'none' ? '.' : r.swap.ret === 'rtaa' ? ', then come back to the assembly area for the trailers.' : ', come back and hook up, then return to the start as the full combination.'}`]);
     r.conf.gaps.forEach(g => items.push(['red', 'block', `${fmtKm(g.d)} off the approved network`, 'The run in or out isn\'t verified for this vehicle. It needs road-owner approval or a different vehicle.']));
     (res.restr.notes || []).filter(n => n.kind !== 'zone' || res.routes.some(x => x.metro)).forEach(n => items.push(['blue', { height: 'height', zone: 'wide', fwy: 'road', prohibited: 'block', dg: 'alert', closure: 'block', bridge: 'bridge' }[n.kind] || 'alert', { height: 'Low structures avoided', zone: 'Central Zones avoided', fwy: 'Freeways avoided', prohibited: 'Prohibited roads avoided', dg: 'Dangerous goods route', closure: 'Live closures avoided', bridge: 'Restricted bridges avoided' }[n.kind] || 'Restriction', n.text]));
     (r.bridgesNear || []).forEach(b => { const rule = RR.routing.bridgeRule(b, RR.vehicles.dims(prof).mass); if (rule) items.push(['red', 'bridge', `Restricted bridge on this route: ${(b.props || {}).ROAD_NAME || ''}`, `Main Roads: "${rule.text}" Do not cross it. Pick another route or tell us with the feedback link.`]); });
@@ -292,7 +294,7 @@
     body.querySelectorAll('[data-cd]').forEach(el => el.onclick = () => fly(r.conditions[+el.dataset.cd].at, 13));
     body.querySelectorAll('[data-rn]').forEach(el => el.onclick = () => fly(r.rulesNear[+el.dataset.rn].at, 16));
     paintDataAge($('routeAge')); $('routeFb').onclick = () => openFeedback('route');
-    $('rShare').onclick = () => shareEta(); $('rSite').onclick = () => editSite(site || { name: app.RUN.labels[app.RUN.labels.length - 1].split(',')[0], at: destPt, kind: 'customer', notes: '' });
+    $('rShare').onclick = () => shareEta(); $('rSite').onclick = () => editSite(site || { name: destOf(r).label.split(',')[0], at: destPt, kind: 'customer', notes: '' });
     if ($('rPermitFile')) $('rPermitFile').onclick = () => openPermitFile(app.PERMIT);
     paintFuel(r); paintWeather(r);
     $('startDrive').onclick = () => drive(false); $('demoDrive').onclick = () => drive(true);
@@ -303,13 +305,14 @@
   // ---------- driving ----------
   let follow = true;
   function drive(demo) {
-    const r = app.RES.routes[app.sel]; if (!r) return; follow = true; app.demo = !!demo; app.reached = 0;
+    const r = app.RES.routes[app.sel]; if (!r) return; follow = true; app.demo = !!demo; app.reached = r.swap ? r.swap.done || 0 : 0;
     const endInfo = r.t.d > 300 ? `Your destination is ${fmtKm(r.t.d)} further, off the approved network.` : null;
     const ok = NAV.start(r, {
       map: RR.map.get(), arrow: ARROW, net: RR.net(app.PROF.net).short, endInfo, follow: () => follow, simSpeed: () => 1,
       ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel') } },
       graph: () => S.data.general ? S.local.g || S.base : S.base,
-      reroute: (pt, reached) => { const run = app.RUN; const stops = run.pts.slice(1, -1), labs = run.labels.slice(1, -1); const G = S.data.general ? S.local.g || S.base : S.base; const nr = RR.routing.reroute(G, [pt, ...stops.slice(reached), run.pts[run.pts.length - 1]], ['Current position', ...labs.slice(reached), run.labels[run.labels.length - 1]], reached + 1); if (nr && !nr.error) {
+      reroute: (pt, reached) => { if (r.swap) { const nr = RR.routing.rerouteSwap(r, pt, Math.max(reached, app.reached || 0)); if (nr && !nr.error) { const offNet = nr.s && nr.s.d > 120; if (offNet) { nr.conf.gaps = [{ ...nr.s, req: pt }]; setTimeout(() => wrongTurnWarning(nr), 2600); } else nr.conf.gaps = nr.conf.gaps.filter(g => g !== nr.s); app.RES.routes[app.sel] = nr; app.RUN = nr.run; } return nr; }
+        const run = app.RUN; const stops = run.pts.slice(1, -1), labs = run.labels.slice(1, -1); const G = S.data.general ? S.local.g || S.base : S.base; const nr = RR.routing.reroute(G, [pt, ...stops.slice(reached), run.pts[run.pts.length - 1]], ['Current position', ...labs.slice(reached), run.labels[run.labels.length - 1]], reached + 1); if (nr && !nr.error) {
           const offNet = nr.s && nr.s.d > 120;
           app.RES.routes[app.sel] = Object.assign(nr, { conf: { ...r.conf, gaps: offNet ? [{ ...nr.s, req: pt }] : [] }, along: RR.routing.alongRoute(nr), tight: r.tight, zones: r.zones, label: r.label });
           if (offNet) setTimeout(() => wrongTurnWarning(nr), 2600);
@@ -377,7 +380,7 @@
       return live.concat(rules, reps).filter(catOn);
     }
     if (r) {
-      const near = alongIdx(r), here = NAV.isActive() && navPos ? (near(navPos) ?? 0) : -1;
+      const near = alongIdx(r), here = NAV.isActive() && navPos ? NAV.along() : -1;
       const rules = RR.alerts.rules(RR.vehicles.active(), r).filter(a => a.cat === 'lowbridge' || a.cat === 'weight' || a.cat === 'height');
       const out = routeAlerts(r).concat(rules.map(a => { const d = near(a.at); return d == null ? null : { ...a, along: d }; }).filter(Boolean));
       return out.filter(a => catOn(a) && (here < 0 || a.along >= here - 200));
@@ -576,7 +579,7 @@
   function hereOnRoute() {
     const r = app.RES && app.RES.routes[app.sel]; if (!r) return null;
     const pos = navPos || (app.ME ? [app.ME.lon, app.ME.lat] : r.line[0]);
-    const near = alongIdx(r); const here = near(pos) ?? 0;
+    const near = alongIdx(r); const here = NAV.isActive() ? NAV.along() : (near(pos) ?? 0); // while driving, trust the nav's own progress (routes can overlap themselves)
     return { r, pos, near, here };
   }
   // distance from a point to the route (rough, sampled) for detour estimates
@@ -612,6 +615,7 @@
   // reroute: current position -> new stop -> remaining stops -> destination, and keep driving
   function insertStop(f) {
     const h = hereOnRoute(); if (!h) return;
+    if (h.r.swap) { openSheet(null); NAV._say('Adding a stop is not available on an assembly area trip yet.'); return toast('Adding stops isn\'t available on an assembly-area trip yet. Head there and plan again from that point.', 7000); }
     const run = app.RUN, done = app.reached || 0;
     const restPts = run.pts.slice(1 + done, -1), restLabs = run.labels.slice(1 + done, -1);
     const pts = [h.pos, f.at, ...restPts, run.pts[run.pts.length - 1]], labels = ['Current position', f.name, ...restLabs, run.labels[run.labels.length - 1]];
@@ -744,6 +748,7 @@
   $('cbReroute').onclick = () => {
     $('closureBar').classList.remove('on');
     const h = hereOnRoute(); if (!h) return;
+    if (h.r.swap) { const nr = RR.routing.rerouteSwap(h.r, h.pos, app.reached || 0, true); if (!nr || nr.error) { NAV._say('I couldn\'t find a legal way around the closure for this vehicle. Check the detour signs.', true); return toast('No legal detour found for this vehicle. Follow the signed detour and check your permit.', 7000); } app.RES.routes[app.sel] = nr; app.RUN = nr.run; NAV.stop(); drive(app.demo); return NAV._say(`New route avoids the closure. ${fmtKm(nr.total).replace('km', 'kilometres')} to go.`, true); }
     const run = app.RUN, done = app.reached || 0;
     const pts = [h.pos, ...run.pts.slice(1 + done)], labels = ['Current position', ...run.labels.slice(1 + done)];
     const G = S.data.general ? S.local.g || S.base : S.base;
@@ -836,6 +841,7 @@
   function paintTripInputs() {
     const v = RR.vehicles.active();
     $('pFuelWrap').style.display = v.tankL && v.useL ? '' : 'none';
+    $('swapRetWrap').hidden = !RR.vehicles.all().some(x => x.id === v.breakTo); $('swapRet').value = RR.store.get('swapRet', 'none');
     const pct = +$('pFuel').value; $('pFuelVal').textContent = pct + '%';
     if (v.tankL && v.useL) $('pFuelHint').textContent = `≈ ${Math.max(0, Math.round((v.tankL * pct / 100 - (v.reserveL || 0)) / v.useL * 100)).toLocaleString()} km before reserve`;
     const ps = RR.permits.forVehicle(v.id);
@@ -844,6 +850,7 @@
     if (ps.length && $('pmPick')) { const valid = ps.find(p => !p.to || new Date(p.to + 'T23:59') > new Date()); if (need && valid) $('pmPick').value = valid.id; }
   }
   $('pFuel').addEventListener('input', paintTripInputs);
+  $('swapRet').onchange = () => RR.store.set('swapRet', $('swapRet').value);
   RR.on('profiles', paintTripInputs); RR.on('permits', paintTripInputs);
   function setCheck(label, tone, text) { const b = document.querySelector(`#tripCheck [data-k="${label}"]`); if (!b) return; b.className = 'tc ' + tone; b.querySelector('span').textContent = text; }
   async function paintFuel(r) {
@@ -886,7 +893,7 @@
   // ---------- share ETA ----------
   function remainingEta() {
     const r = app.RES && app.RES.routes[app.sel]; if (!r) return null;
-    const here = navPos ? (alongIdx(r)(navPos) ?? 0) : 0;
+    const here = NAV.isActive() ? NAV.along() : navPos ? (alongIdx(r)(navPos) ?? 0) : 0;
     return new Date(Date.now() + (r.trueSecs || r.secs) * 1000 * Math.max(0, 1 - here / (r.total || 1)));
   }
   async function shareEta() {
@@ -895,7 +902,7 @@
       if (!s) {
         if (!navigator.onLine) return toast('Sharing needs signal. Try again when you have coverage.');
         const run = app.RUN, pos = navPos || run.pts[0];
-        await RR.shared.startShare({ dest: run.labels[run.labels.length - 1].split(',').slice(0, 2).join(','), destAt: run.pts[run.pts.length - 1], vehicle: (app.PROF || RR.vehicles.active()).name, pos, eta: remainingEta() || new Date() });
+        const dd = destOf(app.RES && app.RES.routes[app.sel]); await RR.shared.startShare({ dest: dd.label.split(',').slice(0, 2).join(','), destAt: dd.pt, vehicle: (app.PROF || RR.vehicles.active()).name, pos, eta: remainingEta() || new Date() });
         s = RR.shared.activeShare();
       }
       if (navigator.share) { try { await navigator.share({ title: 'My ETA', text: 'Track my truck and ETA:', url: s.url }); return; } catch { } }
