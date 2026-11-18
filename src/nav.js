@@ -145,7 +145,7 @@ const NAV = (() => {
     if (!posMarker) posMarker = L.circleMarker([route.line[0][1], route.line[0][0]], { radius: 9, color: '#fff', weight: 3, fillColor: '#0b62d6', fillOpacity: 1 }).addTo(map); else posMarker.addTo(map);
     keepAwake();
     const first = route.steps[0];
-    say(`Starting route on Network ${o.net}. ${fmtKm(route.total).replace('km', 'kilometres')}. Head off on ${speakName(first.name)}.`, true);
+    say(`Starting route on ${o.net}. ${fmtKm(route.total).replace('km', 'kilometres')}. Head off on ${speakName(first.name)}.`, true);
     showBanner(man[0] ? man[0].step : null, man[0] ? man[0].d : route.total, route.total);
     if (demo) { // simulate driving along the route
       let along = 0; const total = cum[cum.length - 1]; const stepM = Math.max(25, total / 600);

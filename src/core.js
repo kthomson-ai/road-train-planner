@@ -177,9 +177,10 @@ const RAV = (() => {
     return c;
   }
 
-  function snap(G, p, maxM = 50000) {
+  function snap(G, p, maxM = 50000, blocked = null) {
     let best = null;
-    const test = code => { const ei = Math.floor(code / 1e6), k = code % 1e6, e = G.E[ei]; const pr = projPointSeg(p, G.coords[e.path[k - 1]], G.coords[e.path[k]]); if (!best || pr.d < best.d) best = { d: pr.d, ei, k, t: pr.t }; };
+    // blocked roads only win if nothing allowed is within ~150 m more
+    const test = code => { const ei = Math.floor(code / 1e6), k = code % 1e6, e = G.E[ei]; const pr = projPointSeg(p, G.coords[e.path[k - 1]], G.coords[e.path[k]]); const score = pr.d + (blocked && blocked.has(ei) ? 150 : 0); if (!best || score < best.score) best = { d: pr.d, score, ei, k, t: pr.t }; };
     let r = 1;
     for (; r <= 64; r *= 2) { for (const c of G.sgrid.near(p[0], p[1], r)) test(c); if (best) break; }
     if (best && r <= 64) for (const c of G.sgrid.near(p[0], p[1], r * 2 + 1)) test(c); // nearer segment may sit in an outer ring
@@ -197,8 +198,9 @@ const RAV = (() => {
   Heap.prototype.size = function () { return this.k.length; };
 
   // edge-based Dijkstra with turn bans
-  function route(G, from, to) {
-    const s = snap(G, from), t = snap(G, to);
+  function route(G, from, to, opts = {}) {
+    const blocked = opts.blocked || null;
+    const s = snap(G, from, 50000, blocked), t = snap(G, to, 50000, blocked);
     if (!s || !t) return { error: 'Could not find the approved network near ' + (!s ? 'the start' : 'the destination') + '.' };
     const ends = new Set([s.ei, t.ei]);
     const nD = G.E.length * 2, dist = new Float64Array(nD).fill(Infinity), prev = new Int32Array(nD).fill(-2);
@@ -228,7 +230,8 @@ const RAV = (() => {
           }
         }
         if (banned(G, d, dout)) continue;
-        const ei = dout >> 1; const nc = c + edgeCost(G, ei, G.E[ei].len, ends);
+        const ei = dout >> 1;
+        if (blocked && blocked.has(ei) && !ends.has(ei)) continue; const nc = c + edgeCost(G, ei, G.E[ei].len, ends);
         if (nc < dist[dout]) { dist[dout] = nc; prev[dout] = d; H.push(nc, dout); }
       }
     }
@@ -330,11 +333,11 @@ const RAV = (() => {
     if (r.steps.length > 1 && r.steps[0].len < 20) { const n = r.steps[1]; n.len += r.steps[0].len; n.pts = r.steps[0].pts.concat(n.pts.slice(1)); n.at = r.steps[0].at; r.steps.shift(); }
     r.steps[0].instr = verb; return r;
   }
-  function routeVia(G, pts, labels = [], firstStopNo = 1) {
-    if (pts.length === 2) { const r = route(G, pts[0], pts[1]); if (!r.error) { trimStart(r, 'Start on'); r.legs2 = [r]; } return r; }
+  function routeVia(G, pts, labels = [], firstStopNo = 1, opts = {}) {
+    if (pts.length === 2) { const r = route(G, pts[0], pts[1], opts); if (!r.error) { trimStart(r, 'Start on'); r.legs2 = [r]; } return r; }
     const legs = [];
     for (let i = 0; i < pts.length - 1; i++) {
-      const r = route(G, pts[i], pts[i + 1]);
+      const r = route(G, pts[i], pts[i + 1], opts);
       if (r.error) return { error: `Leg ${i + 1} (${i === 0 ? 'start' : 'stop ' + (firstStopNo + i - 1)} → ${i === pts.length - 2 ? 'destination' : 'stop ' + (firstStopNo + i)}): ${r.error}` };
       legs.push(r);
     }
@@ -356,9 +359,9 @@ const RAV = (() => {
     return { line, steps, total, secs, s: legs[0].s, t: legs[legs.length - 1].t, legs2: legs, conditions: [...conds.values()], rulesNear: [...rules.values()], bridgesNear: [...brs.values()] };
   }
   // order stops to minimise driving time (start and destination fixed). pts as above. Returns new order of stop indexes.
-  function optimiseOrder(G, pts) {
+  function optimiseOrder(G, pts, opts = {}) {
     const n = pts.length, M = [...Array(n)].map(() => new Float64Array(n).fill(Infinity));
-    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (i !== j && j !== 0 && i !== n - 1) { const r = route(G, pts[i], pts[j]); if (!r.error) M[i][j] = r.secs; }
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (i !== j && j !== 0 && i !== n - 1) { const r = route(G, pts[i], pts[j], opts); if (!r.error) M[i][j] = r.secs; }
     const stops = [...Array(n - 2).keys()].map(k => k + 1);
     // nearest neighbour then 2-opt
     let order = [], cur = 0, left = new Set(stops);
@@ -369,6 +372,52 @@ const RAV = (() => {
     return { order: order.map(s => s - 1), secs: best, before: cost(stops) };
   }
 
-  return { build, route, routeVia, optimiseOrder, snap, hav, parseRule, namesMatch, stripHtml };
+  // ---- vehicle dimension restrictions ----
+  function inPoly(p, poly) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
+  // segments of the graph near a point: [{ei, d}] (d metres)
+  function nearEdges(G, p, maxM) {
+    const out = new Map();
+    for (const code of G.sgrid.near(p[0], p[1], 1)) { const ei = Math.floor(code / 1e6), k = code % 1e6, e = G.E[ei]; const pr = projPointSeg(p, G.coords[e.path[k - 1]], G.coords[e.path[k]]); if (pr.d <= maxM && (!out.has(ei) || out.get(ei) > pr.d)) out.set(ei, pr.d); }
+    return [...out].map(([ei, d]) => ({ ei, d }));
+  }
+  const edgeName = (G, ei) => { const f = G.E[ei].f; return f >= 0 ? G.feats[f].name : ''; };
+  // prof: {height, width, length}; data: {structures:[{at,road,maxH,descr,suburb}], zones:[{name,poly}], prohibited:[features]}
+  function restrictions(G, prof, data) {
+    const blocked = new Set(), notes = [], low = [];
+    const H = +prof.height || 0, W = +prof.width || 0, Lm = +prof.length || 0;
+    if (H > 0) for (const st of data.structures || []) {
+      if (!(st.maxH > 0) || st.maxH - 0.3 >= H) continue; // 300 mm clearance rule
+      let hit = 0;
+      for (const { ei, d } of nearEdges(G, st.at, 30)) if (namesMatch(edgeName(G, ei), st.road) || d < 8) { blocked.add(ei); hit++; }
+      if (hit) low.push(st);
+    }
+    if (low.length) { const m = low.reduce((a, b) => a.maxH < b.maxH ? a : b); notes.push({ kind: 'height', text: `Avoiding ${low.length} overpass${low.length > 1 ? 'es' : ''} or rail bridge${low.length > 1 ? 's' : ''} with less than ${(H + 0.3).toFixed(2)} m clearance (your ${H.toFixed(2)} m plus the 300 mm margin). Lowest: ${m.maxH.toFixed(2)} m on ${m.road}${m.suburb ? ', ' + m.suburb : ''}.` }); }
+    const zoneBan = W > 5.5 || Lm > 30, fwyBan = W > 2.5 && Lm > 25;
+    if (zoneBan || fwyBan) G.E.forEach((e, ei) => {
+      if (fwyBan && /\b(fwy|freeway)\b/i.test(edgeName(G, ei))) blocked.add(ei);
+      if (zoneBan) for (const z of data.zones || []) { const mid = G.coords[e.path[Math.floor(e.path.length / 2)]]; if (inPoly(mid, z.poly) || inPoly(G.coords[e.path[0]], z.poly)) { blocked.add(ei); break; } }
+    });
+    if (zoneBan) notes.push({ kind: 'zone', text: 'Over 5.5 m wide or 30 m long: route avoids the Perth and Fremantle Central Zones.' });
+    if (fwyBan) notes.push({ kind: 'fwy', text: 'Over 2.5 m wide and 25 m long: route avoids freeways.' });
+    // general access: roads on the Network 1 prohibited list
+    let pro = 0;
+    for (const f of data.prohibited || []) {
+      const g = f.geometry; if (!g) continue; const lines = g.type === 'MultiLineString' ? g.coordinates : [g.coordinates];
+      const nm = (f.properties || {}).ROAD_NAME;
+      for (const L of lines) for (let k = 0; k < L.length; k += Math.max(1, Math.floor(L.length / 12))) for (const { ei, d } of nearEdges(G, L[k], 15)) if (namesMatch(edgeName(G, ei), nm) || d < 3) { if (!blocked.has(ei)) pro++; blocked.add(ei); }
+    }
+    if (pro) notes.push({ kind: 'prohibited', text: 'Roads on the Main Roads Network 1 prohibited list are avoided.' });
+    return { blocked, notes, low };
+  }
+  // structures near a finished route with tight clearance (within 0.5 m over the needed clearance)
+  function tightStructures(line, data, H) {
+    if (!(H > 0)) return [];
+    const out = [];
+    for (const st of data.structures || []) { if (!(st.maxH > 0) || st.maxH - 0.3 >= H + 0.5) continue; for (let i = 1; i < line.length; i++) { if (Math.abs(line[i][1] - st.at[1]) > 0.01 && Math.abs(line[i - 1][1] - st.at[1]) > 0.01) continue; if (projPointSeg(st.at, line[i - 1], line[i]).d < 20) { out.push(st); break; } } }
+    return out;
+  }
+  const zonesOnRoute = (line, zones) => (zones || []).filter(z => line.some(p => inPoly(p, z.poly))).map(z => z.name);
+
+  return { restrictions, tightStructures, zonesOnRoute, inPoly, build, route, routeVia, optimiseOrder, snap, hav, parseRule, namesMatch, stripHtml };
 })();
 if (typeof module !== 'undefined') module.exports = RAV;

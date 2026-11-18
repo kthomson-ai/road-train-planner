@@ -51,6 +51,8 @@
   .sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
   .foot { font-size: 11.5px; color: var(--muted); margin-top: 22px; border-top: 1px solid var(--line); padding-top: 10px; }
   .foot a { color: var(--muted); }
+  .dims { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px; }
+  .dims input { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
   .stoprow { margin-top: 8px; }
   .stoprow .lbl { font-size: 12px; font-weight: 600; color: #b45309; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
   .stoprow .row button { padding: 8px 9px; }
@@ -90,17 +92,44 @@
 <div class="app">
   <aside>
     <h1>WA Road Train Route Planner</h1>
-    <div class="sub">Prototype v0.5 (multi-stop, voice + driving mode) · routes only on Main Roads WA approved RAV networks</div>
+    <div class="sub">Prototype v0.6 (vehicle types, oversize rules, multi-stop, voice) · routes only on Main Roads WA approved RAV networks</div>
 
     <label for="net">Vehicle / approved network</label>
     <select id="net">
-      <option value="6">Network 6 · 36.5 m road train (Category 6)</option>
-      <option value="7" selected>Network 7 · 36.5 m double road train (Category 7)</option>
-      <option value="8">Network 8 · 36.5 m truck and two dogs (Category 8)</option>
-      <option value="9">Network 9 · 45–53.5 m triples (Category 9)</option>
-      <option value="10">Network 10 · 53.5 m triple road train (Category 10)</option>
+      <optgroup label="General access">
+        <option value="GEN">Rigid truck or semi up to 19 m (general access)</option>
+      </optgroup>
+      <optgroup label="Tandem drive RAV networks">
+        <option value="TD2">Tandem Drive Network 2</option>
+        <option value="TD3">Tandem Drive Network 3</option>
+        <option value="TD4">Tandem Drive Network 4</option>
+        <option value="TD5">Tandem Drive Network 5</option>
+        <option value="TD6">Network 6 · 36.5 m road train (Category 6)</option>
+        <option value="TD7" selected>Network 7 · 36.5 m double road train (Category 7)</option>
+        <option value="TD8">Network 8 · 36.5 m truck and two dogs (Category 8)</option>
+        <option value="TD9">Network 9 · 45–53.5 m triples (Category 9)</option>
+        <option value="TD10">Network 10 · 53.5 m triple road train (Category 10)</option>
+      </optgroup>
+      <optgroup label="Tri drive RAV networks">
+        <option value="TRI1">Tri Drive Network 1</option>
+        <option value="TRI2">Tri Drive Network 2</option>
+        <option value="TRI3">Tri Drive Network 3</option>
+        <option value="TRI4">Tri Drive Network 4</option>
+        <option value="TRI5">Tri Drive Network 5</option>
+      </optgroup>
+      <optgroup label="Oversize">
+        <option value="OSL">Oversize load (any truck, set the dimensions below)</option>
+        <option value="OSBD27">27.5 m Oversize B-double network</option>
+        <option value="PLAT">Platform trailer relocation network</option>
+      </optgroup>
     </select>
-    <div class="hint">Pick the Tandem Drive network your RAV category is approved for.</div>
+    <div class="hint">Pick the network your RAV notice or permit approves you for.</div>
+    <div class="dims">
+      <div><label for="dimH">Height (m)</label><input id="dimH" type="number" step="0.01" min="0" inputmode="decimal"></div>
+      <div><label for="dimW">Width (m)</label><input id="dimW" type="number" step="0.01" min="0" inputmode="decimal"></div>
+      <div><label for="dimL">Length (m)</label><input id="dimL" type="number" step="0.1" min="0" inputmode="decimal"></div>
+    </div>
+    <div class="hint">Loaded height, width and length. Used to avoid low overpasses, freeways and the Perth/Fremantle Central Zones where the rules require it.</div>
 
     <label for="from">Start</label>
     <div class="row"><input id="from" type="text" placeholder="Town, address or lat,lon"><button class="mic" data-mic="from" title="Say the start">🎤</button><button id="gps" title="Use my location">📍</button></div>
@@ -129,7 +158,7 @@
       <label style="all:unset;cursor:pointer"><input type="checkbox" id="showNet" checked> Show approved network</label>
       <button class="small" id="refresh">Refresh Main Roads data</button>
     </div>
-    <div class="legend" style="flex-wrap:wrap"><span><i class="sw" style="background:#2e9d5b"></i>Approved</span><span><i class="sw" style="background:#e08a1e"></i>Approved with conditions</span><span><i class="sw" style="background:#0b62d6"></i>Route</span><span><b style="background:#1d2329;color:#fff;font-size:9px;padding:1px 3px;border-radius:3px">RTAA</b> Assembly area</span></div>
+    <div class="legend" style="flex-wrap:wrap"><span><i class="sw" style="background:#2e9d5b"></i>Approved</span><span><i class="sw" style="background:#e08a1e"></i>Approved with conditions</span><span><i class="sw" style="background:#0b62d6"></i>Route</span><span><b style="background:#1d2329;color:#fff;font-size:9px;padding:1px 3px;border-radius:3px">RTAA</b> Assembly area</span><span><i class="sw" style="background:#b91c1c"></i>Perth / Fremantle Central Zone</span></div>
 
     <div class="foot">
       <b>Planning aid only.</b> Always check the official <a href="https://mrwebapps.mainroads.wa.gov.au/hvsnetworkmap" target="_blank" rel="noopener">Main Roads RAV Map</a>, your notice or permit, and current road conditions. Turn restrictions are read from text and may be missed. Roads off the approved network need road-owner approval.<br><br>
@@ -324,9 +353,10 @@ const RAV = (() => {
     return c;
   }
 
-  function snap(G, p, maxM = 50000) {
+  function snap(G, p, maxM = 50000, blocked = null) {
     let best = null;
-    const test = code => { const ei = Math.floor(code / 1e6), k = code % 1e6, e = G.E[ei]; const pr = projPointSeg(p, G.coords[e.path[k - 1]], G.coords[e.path[k]]); if (!best || pr.d < best.d) best = { d: pr.d, ei, k, t: pr.t }; };
+    // blocked roads only win if nothing allowed is within ~150 m more
+    const test = code => { const ei = Math.floor(code / 1e6), k = code % 1e6, e = G.E[ei]; const pr = projPointSeg(p, G.coords[e.path[k - 1]], G.coords[e.path[k]]); const score = pr.d + (blocked && blocked.has(ei) ? 150 : 0); if (!best || score < best.score) best = { d: pr.d, score, ei, k, t: pr.t }; };
     let r = 1;
     for (; r <= 64; r *= 2) { for (const c of G.sgrid.near(p[0], p[1], r)) test(c); if (best) break; }
     if (best && r <= 64) for (const c of G.sgrid.near(p[0], p[1], r * 2 + 1)) test(c); // nearer segment may sit in an outer ring
@@ -344,8 +374,9 @@ const RAV = (() => {
   Heap.prototype.size = function () { return this.k.length; };
 
   // edge-based Dijkstra with turn bans
-  function route(G, from, to) {
-    const s = snap(G, from), t = snap(G, to);
+  function route(G, from, to, opts = {}) {
+    const blocked = opts.blocked || null;
+    const s = snap(G, from, 50000, blocked), t = snap(G, to, 50000, blocked);
     if (!s || !t) return { error: 'Could not find the approved network near ' + (!s ? 'the start' : 'the destination') + '.' };
     const ends = new Set([s.ei, t.ei]);
     const nD = G.E.length * 2, dist = new Float64Array(nD).fill(Infinity), prev = new Int32Array(nD).fill(-2);
@@ -375,7 +406,8 @@ const RAV = (() => {
           }
         }
         if (banned(G, d, dout)) continue;
-        const ei = dout >> 1; const nc = c + edgeCost(G, ei, G.E[ei].len, ends);
+        const ei = dout >> 1;
+        if (blocked && blocked.has(ei) && !ends.has(ei)) continue; const nc = c + edgeCost(G, ei, G.E[ei].len, ends);
         if (nc < dist[dout]) { dist[dout] = nc; prev[dout] = d; H.push(nc, dout); }
       }
     }
@@ -477,11 +509,11 @@ const RAV = (() => {
     if (r.steps.length > 1 && r.steps[0].len < 20) { const n = r.steps[1]; n.len += r.steps[0].len; n.pts = r.steps[0].pts.concat(n.pts.slice(1)); n.at = r.steps[0].at; r.steps.shift(); }
     r.steps[0].instr = verb; return r;
   }
-  function routeVia(G, pts, labels = [], firstStopNo = 1) {
-    if (pts.length === 2) { const r = route(G, pts[0], pts[1]); if (!r.error) { trimStart(r, 'Start on'); r.legs2 = [r]; } return r; }
+  function routeVia(G, pts, labels = [], firstStopNo = 1, opts = {}) {
+    if (pts.length === 2) { const r = route(G, pts[0], pts[1], opts); if (!r.error) { trimStart(r, 'Start on'); r.legs2 = [r]; } return r; }
     const legs = [];
     for (let i = 0; i < pts.length - 1; i++) {
-      const r = route(G, pts[i], pts[i + 1]);
+      const r = route(G, pts[i], pts[i + 1], opts);
       if (r.error) return { error: `Leg ${i + 1} (${i === 0 ? 'start' : 'stop ' + (firstStopNo + i - 1)} → ${i === pts.length - 2 ? 'destination' : 'stop ' + (firstStopNo + i)}): ${r.error}` };
       legs.push(r);
     }
@@ -503,9 +535,9 @@ const RAV = (() => {
     return { line, steps, total, secs, s: legs[0].s, t: legs[legs.length - 1].t, legs2: legs, conditions: [...conds.values()], rulesNear: [...rules.values()], bridgesNear: [...brs.values()] };
   }
   // order stops to minimise driving time (start and destination fixed). pts as above. Returns new order of stop indexes.
-  function optimiseOrder(G, pts) {
+  function optimiseOrder(G, pts, opts = {}) {
     const n = pts.length, M = [...Array(n)].map(() => new Float64Array(n).fill(Infinity));
-    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (i !== j && j !== 0 && i !== n - 1) { const r = route(G, pts[i], pts[j]); if (!r.error) M[i][j] = r.secs; }
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (i !== j && j !== 0 && i !== n - 1) { const r = route(G, pts[i], pts[j], opts); if (!r.error) M[i][j] = r.secs; }
     const stops = [...Array(n - 2).keys()].map(k => k + 1);
     // nearest neighbour then 2-opt
     let order = [], cur = 0, left = new Set(stops);
@@ -516,7 +548,53 @@ const RAV = (() => {
     return { order: order.map(s => s - 1), secs: best, before: cost(stops) };
   }
 
-  return { build, route, routeVia, optimiseOrder, snap, hav, parseRule, namesMatch, stripHtml };
+  // ---- vehicle dimension restrictions ----
+  function inPoly(p, poly) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
+  // segments of the graph near a point: [{ei, d}] (d metres)
+  function nearEdges(G, p, maxM) {
+    const out = new Map();
+    for (const code of G.sgrid.near(p[0], p[1], 1)) { const ei = Math.floor(code / 1e6), k = code % 1e6, e = G.E[ei]; const pr = projPointSeg(p, G.coords[e.path[k - 1]], G.coords[e.path[k]]); if (pr.d <= maxM && (!out.has(ei) || out.get(ei) > pr.d)) out.set(ei, pr.d); }
+    return [...out].map(([ei, d]) => ({ ei, d }));
+  }
+  const edgeName = (G, ei) => { const f = G.E[ei].f; return f >= 0 ? G.feats[f].name : ''; };
+  // prof: {height, width, length}; data: {structures:[{at,road,maxH,descr,suburb}], zones:[{name,poly}], prohibited:[features]}
+  function restrictions(G, prof, data) {
+    const blocked = new Set(), notes = [], low = [];
+    const H = +prof.height || 0, W = +prof.width || 0, Lm = +prof.length || 0;
+    if (H > 0) for (const st of data.structures || []) {
+      if (!(st.maxH > 0) || st.maxH - 0.3 >= H) continue; // 300 mm clearance rule
+      let hit = 0;
+      for (const { ei, d } of nearEdges(G, st.at, 30)) if (namesMatch(edgeName(G, ei), st.road) || d < 8) { blocked.add(ei); hit++; }
+      if (hit) low.push(st);
+    }
+    if (low.length) { const m = low.reduce((a, b) => a.maxH < b.maxH ? a : b); notes.push({ kind: 'height', text: `Avoiding ${low.length} overpass${low.length > 1 ? 'es' : ''} or rail bridge${low.length > 1 ? 's' : ''} with less than ${(H + 0.3).toFixed(2)} m clearance (your ${H.toFixed(2)} m plus the 300 mm margin). Lowest: ${m.maxH.toFixed(2)} m on ${m.road}${m.suburb ? ', ' + m.suburb : ''}.` }); }
+    const zoneBan = W > 5.5 || Lm > 30, fwyBan = W > 2.5 && Lm > 25;
+    if (zoneBan || fwyBan) G.E.forEach((e, ei) => {
+      if (fwyBan && /\b(fwy|freeway)\b/i.test(edgeName(G, ei))) blocked.add(ei);
+      if (zoneBan) for (const z of data.zones || []) { const mid = G.coords[e.path[Math.floor(e.path.length / 2)]]; if (inPoly(mid, z.poly) || inPoly(G.coords[e.path[0]], z.poly)) { blocked.add(ei); break; } }
+    });
+    if (zoneBan) notes.push({ kind: 'zone', text: 'Over 5.5 m wide or 30 m long: route avoids the Perth and Fremantle Central Zones.' });
+    if (fwyBan) notes.push({ kind: 'fwy', text: 'Over 2.5 m wide and 25 m long: route avoids freeways.' });
+    // general access: roads on the Network 1 prohibited list
+    let pro = 0;
+    for (const f of data.prohibited || []) {
+      const g = f.geometry; if (!g) continue; const lines = g.type === 'MultiLineString' ? g.coordinates : [g.coordinates];
+      const nm = (f.properties || {}).ROAD_NAME;
+      for (const L of lines) for (let k = 0; k < L.length; k += Math.max(1, Math.floor(L.length / 12))) for (const { ei, d } of nearEdges(G, L[k], 15)) if (namesMatch(edgeName(G, ei), nm) || d < 3) { if (!blocked.has(ei)) pro++; blocked.add(ei); }
+    }
+    if (pro) notes.push({ kind: 'prohibited', text: 'Roads on the Main Roads Network 1 prohibited list are avoided.' });
+    return { blocked, notes, low };
+  }
+  // structures near a finished route with tight clearance (within 0.5 m over the needed clearance)
+  function tightStructures(line, data, H) {
+    if (!(H > 0)) return [];
+    const out = [];
+    for (const st of data.structures || []) { if (!(st.maxH > 0) || st.maxH - 0.3 >= H + 0.5) continue; for (let i = 1; i < line.length; i++) { if (Math.abs(line[i][1] - st.at[1]) > 0.01 && Math.abs(line[i - 1][1] - st.at[1]) > 0.01) continue; if (projPointSeg(st.at, line[i - 1], line[i]).d < 20) { out.push(st); break; } } }
+    return out;
+  }
+  const zonesOnRoute = (line, zones) => (zones || []).filter(z => line.some(p => inPoly(p, z.poly))).map(z => z.name);
+
+  return { restrictions, tightStructures, zonesOnRoute, inPoly, build, route, routeVia, optimiseOrder, snap, hav, parseRule, namesMatch, stripHtml };
 })();
 if (typeof module !== 'undefined') module.exports = RAV;
 
@@ -669,7 +747,7 @@ const NAV = (() => {
     if (!posMarker) posMarker = L.circleMarker([route.line[0][1], route.line[0][0]], { radius: 9, color: '#fff', weight: 3, fillColor: '#0b62d6', fillOpacity: 1 }).addTo(map); else posMarker.addTo(map);
     keepAwake();
     const first = route.steps[0];
-    say(`Starting route on Network ${o.net}. ${fmtKm(route.total).replace('km', 'kilometres')}. Head off on ${speakName(first.name)}.`, true);
+    say(`Starting route on ${o.net}. ${fmtKm(route.total).replace('km', 'kilometres')}. Head off on ${speakName(first.name)}.`, true);
     showBanner(man[0] ? man[0].step : null, man[0] ? man[0].d : route.total, route.total);
     if (demo) { // simulate driving along the route
       let along = 0; const total = cum[cum.length - 1]; const stepM = Math.max(25, total / 600);
@@ -706,7 +784,22 @@ const VOICE = (() => {
 <script>
 (() => {
 const BASE = 'https://gisservices.mainroads.wa.gov.au/arcgis/rest/services/OpenData/HVS_Networks_DataPortal/MapServer/';
-const LAYERS = { 6: { lines: [56, 57], ints: 55, br: 54 }, 7: { lines: [61, 62], ints: 60, br: 59 }, 8: { lines: [66, 67], ints: 65, br: 64 }, 9: { lines: [71, 72], ints: 70, br: 69 }, 10: { lines: [76, 77], ints: 75, br: 74 } };
+const ASSETS = 'https://gisservices.mainroads.wa.gov.au/arcgis/rest/services/OpenData/RoadAssets_DataPortal/MapServer/';
+const grp = g => ({ br: g + 1, ints: g + 2, lines: [g + 3, g + 4] });
+function layerSet(k) {
+  let m;
+  if ((m = /^TD(\d+)$/.exec(k))) return grp(28 + 5 * (m[1] - 1));
+  if ((m = /^TRI(\d+)$/.exec(k))) return grp(216 + 5 * (m[1] - 1));
+  return { OSBD27: grp(687), PLAT: grp(770) }[k] || null; // GEN / OSL use the general road network
+}
+const VEH = { GEN: [19, 2.5], OSL: [25, 3.5], TD2: [25, 2.5], TD3: [27.5, 2.5], TD4: [27.5, 2.5], TD5: [27.5, 2.5], TD6: [36.5, 2.5], TD7: [36.5, 2.5], TD8: [36.5, 2.5], TD9: [53.5, 2.5], TD10: [53.5, 2.5], TRI1: [27.5, 2.5], TRI2: [36.5, 2.5], TRI3: [36.5, 2.5], TRI4: [53.5, 2.5], TRI5: [53.5, 2.5], OSBD27: [27.5, 3.5], PLAT: [25, 3.5] };
+const netName = k => { const o = [...document.querySelectorAll('#net option')].find(x => x.value === k); return o ? o.textContent.split(' · ')[0] : k; };
+// Perth and Fremantle Central Zones (traced from the Main Roads permit appendix maps; approximate)
+const ZONES = [
+  { name: 'Perth Central Zone', poly: [[115.81821,-31.96467],[115.84194,-31.94334],[115.84576,-31.93927],[115.86898,-31.94984],[115.86779,-31.95299],[115.87743,-31.95448],[115.87461,-31.96072],[115.87386,-31.96238],[115.86458,-31.95935],[115.86409,-31.96054],[115.85839,-31.95864],[115.85585,-31.9561],[115.85349,-31.95541],[115.85007,-31.95505],[115.84791,-31.95587],[115.84655,-31.95769],[115.84608,-31.95987],[115.8462,-31.96087],[115.8425,-31.9638],[115.8385,-31.9662],[115.834,-31.9695],[115.83,-31.9735],[115.8262,-31.9765],[115.8222,-31.9787],[115.8185,-31.979],[115.81782,-31.97303],[115.81777,-31.96691]] },
+  { name: 'Fremantle Central Zone', poly: [[115.74331,-32.0576],[115.74214,-32.05503],[115.74591,-32.05232],[115.74862,-32.04937],[115.752,-32.0466],[115.75369,-32.04504],[115.7556,-32.0437],[115.7581,-32.04414],[115.7582,-32.05083],[115.756,-32.0526],[115.75698,-32.06357],[115.75039,-32.06365],[115.747,-32.0605]] }
+];
+const inMetro = p => p[1] < -31.45 && p[1] > -32.6 && p[0] > 115.55 && p[0] < 116.3; // approximate Perth metropolitan area
 const OFF_NET_M = 300, CACHE_DAYS = 7;
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -760,10 +853,10 @@ function setPoint(which, lon, lat, label) {
 function idb() { return new Promise((res, rej) => { try { const r = indexedDB.open('rav-cache', 1); r.onupgradeneeded = () => r.result.createObjectStore('layers'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); }
 async function cacheGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction('layers').objectStore('layers').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch { return null; } }
 async function cachePut(k, v) { try { const db = await idb(); db.transaction('layers', 'readwrite').objectStore('layers').put(v, k); } catch { } }
-async function fetchLayer(id, fields, onPage) {
+async function fetchLayer(id, fields, onPage, base = BASE, where = '1=1', extra = '') {
   let out = [], off = 0;
-  for (let page = 0; page < 50; page++) {
-    const url = `${BASE}${id}/query?where=1%3D1&outFields=${fields}&outSR=4326&geometryPrecision=6&f=geojson&resultOffset=${off}&resultRecordCount=2000`;
+  for (let page = 0; page < 80; page++) {
+    const url = `${base}${id}/query?where=${encodeURIComponent(where)}&outFields=${fields}&outSR=4326&geometryPrecision=6&f=geojson&resultOffset=${off}&resultRecordCount=2000${extra}`;
     const r = await fetch(url); if (!r.ok) throw new Error('Main Roads server returned ' + r.status);
     const j = await r.json(); if (j.error) throw new Error(j.error.message || 'Main Roads query error');
     out = out.concat(j.features || []); onPage && onPage(out.length);
@@ -772,22 +865,52 @@ async function fetchLayer(id, fields, onPage) {
   }
   return out;
 }
+const ROADF = 'ROAD,ROAD_NAME,NETWORK_TYPE,CONDITION,COMMENTS,CURFEW,MAX_SPEED';
 async function loadNetwork(n, force) {
-  const key = 'v2-net' + n, cached = !force && await cacheGet(key);
+  const key = 'v3-net-' + n, cached = !force && await cacheGet(key);
   if (cached && Date.now() - cached.t < CACHE_DAYS * 864e5) return cached;
-  const L_ = LAYERS[n]; const lines = [];
-  for (const [i, id] of L_.lines.entries()) {
-    const f = await fetchLayer(id, 'ROAD,ROAD_NAME,NETWORK_TYPE,CONDITION,COMMENTS,CURFEW,MAX_SPEED', c => status(`Downloading Network ${n} from Main Roads… ${lines.length + c} road sections`));
-    f.forEach(x => x.properties._cond = i === 0); lines.push(...f);
+  let rec;
+  if (n === 'GEN' || n === 'OSL') { // general access: distributor roads statewide (+ local roads near each point at route time), minus Network 1 prohibited roads
+    const lines = await fetchLayer(16, 'ROAD,ROAD_NAME,NETWORK_TYPE', c => status(`Downloading main roads statewide from Main Roads… ${c} sections`), ASSETS, "ROAD_HIERARCHY <> 'Access Road'");
+    lines.forEach(x => x.properties._cond = false);
+    status('Downloading Network 1 prohibited roads…');
+    const prohibited = (await fetchLayer(31, ROADF).catch(() => [])).concat(await fetchLayer(32, ROADF).catch(() => []));
+    rec = { t: Date.now(), lines, ints: [], br: [], prohibited, general: true };
+  } else {
+    const L_ = layerSet(n); const lines = [];
+    for (const [i, id] of L_.lines.entries()) {
+      const f = await fetchLayer(id, ROADF, c => status(`Downloading ${netName(n)} from Main Roads… ${lines.length + c} road sections`));
+      f.forEach(x => x.properties._cond = i === 0); lines.push(...f);
+    }
+    status('Downloading turn restrictions and bridges…');
+    const ints = await fetchLayer(L_.ints, 'NODE_DESCR,CONDITION').catch(() => []);
+    const br = await fetchLayer(L_.br, '*').catch(() => []);
+    rec = { t: Date.now(), lines, ints, br, prohibited: [] };
   }
-  status('Downloading turn restrictions and bridges…');
-  const ints = await fetchLayer(L_.ints, 'NODE_DESCR,CONDITION').catch(() => []);
-  const br = await fetchLayer(L_.br, '*').catch(() => []);
-  const rec = { t: Date.now(), lines, ints, br };
   cachePut(key, rec); return rec;
 }
-
-let G = null, DATA = null, curNet = null, RTAA = [];
+// low overpasses / rail bridges (Main Roads drive-under structures)
+let STRUCTS = [];
+async function loadStructures() {
+  let c = await cacheGet('v1-structs');
+  if (!c || Date.now() - c.t > CACHE_DAYS * 864e5) { try { c = { t: Date.now(), f: await fetchLayer(781, 'ROAD_NAME,MAXIMUM_LOAD_HEIGHT,STR_DESCR,SUBURB,CROSSING_NAME') }; cachePut('v1-structs', c); } catch { c = c || { f: [] }; } }
+  STRUCTS = c.f.filter(f => f.geometry).map(f => ({ at: f.geometry.coordinates, road: f.properties.ROAD_NAME || '', maxH: +f.properties.MAXIMUM_LOAD_HEIGHT || 0, descr: f.properties.STR_DESCR || 'Structure', suburb: f.properties.SUBURB || '' }));
+}
+loadStructures();
+// local roads around a point for general-access routing (adaptive radius so busy metro areas stay light)
+const LOCAL = new Map();
+async function localRoads(p) {
+  const k = p[0].toFixed(3) + ',' + p[1].toFixed(3); if (LOCAL.has(k)) return LOCAL.get(k);
+  let feats = [];
+  for (const km of [6, 3, 1.5]) {
+    const d = km / 111, dx = km / (111 * Math.cos(p[1] * Math.PI / 180));
+    const env = `&geometry=${encodeURIComponent([p[0] - dx, p[1] - d, p[0] + dx, p[1] + d].join(','))}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects`;
+    const cnt = await fetch(`${ASSETS}16/query?where=${encodeURIComponent("ROAD_HIERARCHY = 'Access Road'")}&returnCountOnly=true&f=json${env}`).then(r => r.json()).then(j => j.count || 0).catch(() => 0);
+    if (cnt <= 6000 || km === 1.5) { feats = await fetchLayer(16, 'ROAD,ROAD_NAME,NETWORK_TYPE', null, ASSETS, "ROAD_HIERARCHY = 'Access Road'", env).catch(() => []); break; }
+  }
+  feats.forEach(x => x.properties._cond = false); LOCAL.set(k, feats); return feats;
+}
+let G = null, GBASE = null, RESTR = null, RKEY = '', DATA = null, curNet = null, RTAA = [];
 const asmLayer = L.layerGroup().addTo(map);
 const tcase = t => (t || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 async function loadAssembly() {
@@ -800,18 +923,21 @@ async function loadAssembly() {
 }
 loadAssembly();
 async function prepare(force) {
-  const n = +$('net').value; curNet = n; G = null; updateGo();
+  const n = $('net').value; curNet = n; G = null; GBASE = null; RESTR = null; updateGo();
+  if (!$('dimL').value || $('dimL').dataset.auto) { $('dimL').value = VEH[n][0]; $('dimL').dataset.auto = 1; }
+  if (!$('dimW').value || $('dimW').dataset.auto) { $('dimW').value = VEH[n][1]; $('dimW').dataset.auto = 1; }
+  if (!$('dimH').value) { $('dimH').value = 4.3; $('dimH').dataset.auto = 1; }
   $('go').textContent = 'Loading network…'; routeLayer.clearLayers(); $('result').innerHTML = '';
   try {
     DATA = await loadNetwork(n, force);
     if (curNet !== n) return;
     status('Building road graph…'); await new Promise(r => setTimeout(r, 20));
     const t0 = performance.now();
-    G = RAV.build(DATA.lines, DATA.ints, DATA.br);
+    G = GBASE = RAV.build(DATA.lines, DATA.ints, DATA.br);
     drawNetwork();
     const age = Math.round((Date.now() - DATA.t) / 36e5);
-    $('dataInfo').textContent = `Network ${n}: ${DATA.lines.length} road sections, ${DATA.ints.length} intersection rules. Data ${age < 1 ? 'downloaded just now' : 'cached ' + (age < 48 ? age + ' h' : Math.round(age / 24) + ' days') + ' ago'}.`;
-    status(`Network ${n} ready (${((performance.now() - t0) / 1000).toFixed(1)} s).`);
+    $('dataInfo').textContent = `${netName(n)}: ${DATA.lines.length} road sections${DATA.general ? ' (main roads; local streets load around each stop)' : ', ' + DATA.ints.length + ' intersection rules'}. Data ${age < 1 ? 'downloaded just now' : 'cached ' + (age < 48 ? age + ' h' : Math.round(age / 24) + ' days') + ' ago'}.`;
+    status(`${netName(n)} ready (${((performance.now() - t0) / 1000).toFixed(1)} s).`);
   } catch (e) {
     if (netFail(e)) { showBlocked(); status('Could not reach Main Roads WA.'); }
     else status('Could not load Main Roads data: ' + e.message + '. Check your connection and try Refresh.');
@@ -907,8 +1033,9 @@ async function resolveAll() {
 $('optStops').onclick = async () => {
   if (!G) return; const run = await resolveAll(); if (!run) return;
   if (run.ids.length < 4) { status('Add at least two stops to optimise.'); return; }
+  G = await graphFor(run.pts); const rs = restrictFor(G, run.pts);
   status('Working out the quickest stop order…'); await new Promise(r => setTimeout(r, 30));
-  const res = RAV.optimiseOrder(G, run.pts);
+  const res = RAV.optimiseOrder(G, run.pts, { blocked: rs.blocked });
   const saved = (res.before - res.secs) / 60;
   if (saved > 1) { // only reorder when it actually helps; ties keep the driver's order
     const stopsUsed = run.ids.slice(1, -1), reordered = res.order.map(k => stopsUsed[k]);
@@ -946,22 +1073,59 @@ let pickMode = '';
 document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { pickMode = b.dataset.pick; document.querySelectorAll('[data-pick]').forEach(x => x.classList.toggle('on', x === b)); });
 map.on('click', e => { if (!pickMode) return; setPoint(pickMode, e.latlng.lng, e.latlng.lat, `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`); if (pickMode === 'from') { document.querySelector('[data-pick="to"]').click(); } else { document.querySelector('[data-pick=""]').click(); } });
 
+// ---- vehicle profile, zones, restrictions ----
+['dimH', 'dimW', 'dimL'].forEach(id => $(id).addEventListener('input', () => { delete $(id).dataset.auto; RESTR = null; }));
+const zoneLayer = L.layerGroup().addTo(map);
+ZONES.forEach(z => L.polygon(z.poly.map(p => [p[1], p[0]]), { color: '#b91c1c', weight: 2, dashArray: '6 6', fillColor: '#b91c1c', fillOpacity: 0.06, interactive: true }).addTo(zoneLayer).bindTooltip(z.name + ' (approximate; see the Main Roads permit maps)'));
+const prof = () => ({ height: parseFloat($('dimH').value) || 0, width: parseFloat($('dimW').value) || 0, length: parseFloat($('dimL').value) || 0 });
+// general access: add local streets around each point, then rebuild the graph
+async function graphFor(pts) {
+  if (!DATA || !DATA.general) return GBASE;
+  status('Loading local streets around your start, stops and destination…');
+  const extra = []; for (const p of pts) extra.push(...await localRoads(p));
+  const key = pts.map(p => p[0].toFixed(3) + p[1].toFixed(3)).join('|');
+  if (graphFor.key === key && graphFor.g) return graphFor.g;
+  status('Building road graph…'); await new Promise(r => setTimeout(r, 20));
+  const seen = new Set(), feats = [];
+  for (const f of DATA.lines.concat(extra)) { const id = (f.properties.ROAD || '') + '|' + JSON.stringify(f.geometry && f.geometry.coordinates[0]); if (seen.has(id)) continue; seen.add(id); feats.push(f); }
+  graphFor.key = key; graphFor.g = RAV.build(feats, [], []); return graphFor.g;
+}
+function restrictFor(g, pts) {
+  // a zone that contains the start, a stop or the destination can't be avoided: don't block it (warned later)
+  const zones = ZONES.filter(z => !(pts || []).some(p => RAV.inPoly(p, z.poly)));
+  const p = prof(), key = curNet + JSON.stringify(p) + (g === GBASE ? 'b' : graphFor.key) + zones.map(z => z.name).join();
+  if (RESTR && RKEY === key) return RESTR;
+  RESTR = RAV.restrictions(g, p, { structures: STRUCTS, zones, prohibited: DATA && DATA.prohibited || [] }); RKEY = key; return RESTR;
+}
+function advisories(r, p) {
+  const out = [];
+  if (p.height > 4.3) out.push(p.height <= 4.6 ? `Over 4.3 m high: on Tandem Drive Network 2 roads you can go up to 4.6 m without written confirmation from overhead cable owners; elsewhere you need it before travel.` : `Over 4.3 m high: you need written confirmation from every overhead cable owner on the route that there's enough clearance.`);
+  const metro = r.line.some(inMetro), oversize = p.width > 2.7 || p.length > 22;
+  if (metro && oversize) out.push(`This route uses Perth metro roads. Vehicles over 22 m long or 2.7 m wide have peak-hour limits (7:30–9:00 am and 4:30–6:00 pm, Mon–Fri) unless on approved networks, and very large loads (over 40 m or 6.5 m wide) have tighter time windows. Check your permit.`);
+  if (p.width > 8.5 || p.length > 50) out.push('Over 8.5 m wide or 50 m long: an Oversize Overmass Transport Management Plan is required.');
+  const zones = RAV.zonesOnRoute(r.line, ZONES);
+  if (zones.length) out.push((p.width > 5.5 || p.length > 30 ? `Your start, a stop or the destination is inside the ${zones.join(' and ')}. At over 5.5 m wide or 30 m long you need specific approval to travel there.` : `Route enters the ${zones.join(' and ')}. Oversize vehicles have extra pilot, escort and convoy rules there.`));
+  return out;
+}
 // ---- routing + rendering ----
 const ARROW = i => /^Arrive at stop/.test(i) ? '📍' : /^Leave on/.test(i) ? '●' : /sharp left/.test(i) ? '↰' : /sharp right/.test(i) ? '↱' : /left/.test(i) ? (/Bear/.test(i) ? '↖' : '←') : /right/.test(i) ? (/Bear/.test(i) ? '↗' : '→') : /Start/.test(i) ? '●' : '↑';
 $('go').onclick = async () => {
   if (!G) return;
   const run = await resolveAll(); if (!run) return;
+  G = await graphFor(run.pts);
+  status('Checking height, width and length rules…'); await new Promise(r => setTimeout(r, 10));
+  const rs = restrictFor(G, run.pts);
   status('Finding a legal route…');
   setTimeout(() => {
     const t0 = performance.now();
     RUN = run;
-    const r = RAV.routeVia(G, run.pts, run.labels);
+    const r = RAV.routeVia(G, run.pts, run.labels, 1, { blocked: rs.blocked });
     render(r, performance.now() - t0);
   }, 10);
 };
 function render(r, ms) {
   routeLayer.clearLayers(); const box = $('result'); box.innerHTML = '';
-  if (r.error) { box.innerHTML = `<div class="card bad">${esc(r.error)}<div class="hint">The two points may be on parts of the network that don't connect for this vehicle. Try a nearby town, or a higher category only if you're approved for it.</div></div>`; status(''); return; }
+  if (r.error) { box.innerHTML = `<div class="card bad">${esc(r.error)}<div class="hint">The points may be on parts of the network that don't connect for this vehicle, or the height/width/length rules block every way through. Check the dimensions, try a nearby town, or pick a higher category only if you're approved for it.</div></div>`; status(''); return; }
   const ll = r.line.map(c => [c[1], c[0]]);
   L.polyline(ll, { color: '#fff', weight: 9, opacity: 0.9 }).addTo(routeLayer);
   const pl = L.polyline(ll, { color: '#0b62d6', weight: 5 }).addTo(routeLayer);
@@ -979,13 +1143,18 @@ function render(r, ms) {
   }
   const bnd = pl.getBounds(); (RUN ? RUN.ids : ['from', 'to']).forEach(i => P[i] && bnd.extend([P[i].lat, P[i].lon])); map.fitBounds(bnd, { padding: [30, 30] });
   const hard = r.conditions.filter(c => c.notThrough);
-  let h = `<div class="card"><div class="big">${fmtKm(r.total)} · ${fmtTime(r.secs)}</div><div class="hint">On Tandem Drive Network ${curNet} roads only. Time assumes 90 km/h on state roads, 70 km/h on local roads (or posted RAV limits), with no stops.</div></div>`;
+  let h = `<div class="card"><div class="big">${fmtKm(r.total)} · ${fmtTime(r.secs)}</div><div class="hint">${DATA && DATA.general ? 'On public roads, avoiding Network 1 prohibited roads.' : 'On ' + netName(curNet) + ' approved roads only.'} Time assumes 90 km/h on state roads, 70 km/h on local roads (or posted RAV limits), with no stops.</div></div>`;
   h += `<div class="drive"><button class="go" id="startDrive">▶ Start driving</button><button id="demoDrive" title="Plays the route as if driving, so you can hear the directions">Demo drive</button></div>`;
   if (gaps.length) h += `<div class="card warn">${gaps.join('<br><br>')}</div>`;
+  const pr = prof(), notes = (RESTR ? RESTR.notes : []).map(n => n.text), adv = advisories(r, pr);
+  const tight = RAV.tightStructures(r.line, { structures: STRUCTS }, pr.height);
+  if (notes.length) h += `<div class="card">${notes.map(esc).join('<br>')}</div>`;
+  if (tight.length) h += `<div class="card warn"><b>Tight clearance on this route</b> (within 0.5 m of what your ${pr.height} m needs):<br>${tight.map(t => esc(`${t.maxH.toFixed(2)} m · ${t.descr} over ${t.road}${t.suburb ? ', ' + t.suburb : ''}`)).join('<br>')}</div>`;
+  if (adv.length) h += `<div class="card warn">${adv.map(esc).join('<br><br>')}</div>`;
   const nearAsm = p => RTAA.map(a => ({ ...a, d: RAV.hav([p.lon, p.lat], a.at) })).sort((x, y) => x.d - y.d)[0];
   const asmNotes = [];
   for (const [w, lbl] of [['from', 'start'], ['to', 'destination']]) { const a = nearAsm(P[w]); if (a && a.d < 60000) asmNotes.push(`Nearest road train assembly area to your ${lbl}: <b>${esc(a.name)}</b> (${esc(a.road || '')}, ${fmtKm(a.d)} away).`); }
-  if (asmNotes.length) h += `<div class="card">${asmNotes.join('<br>')}<div class="hint">If you're coming in or out of Perth metro, the road train usually makes up or breaks down at one of these, so plan the road train leg from there.</div></div>`;
+  if (asmNotes.length && /^(TD(6|7|8|9|10)|TRI[2-5])$/.test(curNet)) h += `<div class="card">${asmNotes.join('<br>')}<div class="hint">If you're coming in or out of Perth metro, the road train usually makes up or breaks down at one of these, so plan the road train leg from there.</div></div>`;
   if (r.rulesNear.length) h += `<div class="card warn">${r.rulesNear.length} intersection restriction${r.rulesNear.length > 1 ? 's' : ''} on or near this route. The route avoids the ones it could read, but check the list below.</div>`;
   h += `<div class="sect">Directions <button class="small" id="copy">Copy</button></div><ol class="steps">`;
   r.steps.forEach((s, i) => { h += `<li data-i="${i}"><span class="arrow">${ARROW(s.instr)}</span><span>${esc(s.instr)} <b>${esc(s.name)}</b></span><span class="dist">${fmtKm(s.len)}</span></li>`; });
@@ -1008,7 +1177,7 @@ function render(r, ms) {
   box.querySelectorAll('[data-c]').forEach(el => el.onclick = () => { const c = conds[+el.dataset.c]; map.setView([c.at[1], c.at[0]], 13); });
   box.querySelectorAll('[data-r]').forEach(el => el.onclick = () => { const x = r.rulesNear[+el.dataset.r]; map.setView([x.at[1], x.at[0]], 16); });
   $('copy').onclick = async () => {
-    const txt = [`${P.from.label} → ${P.to.label} (Network ${curNet})`, `${fmtKm(r.total)}, ${fmtTime(r.secs)}`, ...r.steps.map((s, i) => `${i + 1}. ${s.instr} ${s.name} (${fmtKm(s.len)})`), 'Arrive', ...(conds.length ? ['', 'Conditions:', ...conds.map(c => `- ${c.road}: ${c.text}`)] : []), '', 'Planning aid only, check the Main Roads RAV Map.'].join('\n');
+    const txt = [`${P.from.label} → ${P.to.label} (${netName(curNet)})`, `${fmtKm(r.total)}, ${fmtTime(r.secs)}`, ...r.steps.map((s, i) => `${i + 1}. ${s.instr} ${s.name} (${fmtKm(s.len)})`), 'Arrive', ...(conds.length ? ['', 'Conditions:', ...conds.map(c => `- ${c.road}: ${c.text}`)] : []), '', 'Planning aid only, check the Main Roads RAV Map.'].join('\n');
     try { await navigator.clipboard.writeText(txt); status('Directions copied.'); } catch { status('Copy not allowed here.'); }
   };
   LAST = r; window.__dbgLast = () => LAST;
@@ -1028,11 +1197,11 @@ function drive(demo) {
   const endInfo = LAST.t.d > OFF_NET_M ? `Your destination is ${fmtKm(LAST.t.d)} further, off the approved network.` : null;
   const ok = NAV.start(LAST, {
     ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel') } },
-    map, arrow: ARROW, net: curNet, endInfo, follow: () => follow, simSpeed: () => 1,
+    map, arrow: ARROW, net: netName(curNet), endInfo, follow: () => follow, simSpeed: () => 1,
     reroute: (pt, reached) => {
       const stops = RUN ? RUN.pts.slice(1, -1) : [], labs = RUN ? RUN.labels.slice(1, -1) : [];
       const pts = [pt, ...stops.slice(reached), [P.to.lon, P.to.lat]], labels = ['Current position', ...labs.slice(reached), P.to.label];
-      const r = RAV.routeVia(G, pts, labels, reached + 1); if (r && !r.error) LAST = r; return r; },
+      const r = RAV.routeVia(G, pts, labels, reached + 1, { blocked: RESTR ? RESTR.blocked : null }); if (r && !r.error) LAST = r; return r; },
     graph: () => G,
     drawRoute: drawRouteOnly
   }, demo);
