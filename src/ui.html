@@ -92,7 +92,7 @@
 <div class="app">
   <aside>
     <h1>WA Road Train Route Planner</h1>
-    <div class="sub">Prototype v0.6.1 (vehicle types, oversize rules, multi-stop, voice) · routes only on Main Roads WA approved RAV networks</div>
+    <div class="sub">Prototype v0.6.2 (vehicle types, oversize rules, multi-stop, voice) · routes only on Main Roads WA approved RAV networks</div>
 
     <label for="net">Vehicle / approved network</label>
     <select id="net">
@@ -265,9 +265,9 @@ async function fetchLayer(id, fields, onPage, base = BASE, where = '1=1', extra 
 }
 const ROADF = 'ROAD,ROAD_NAME,NETWORK_TYPE,CONDITION,COMMENTS,CURFEW,MAX_SPEED';
 // bus lanes, paths and the like are in the Main Roads road data but aren't for trucks
-const truckRoad = f => !/bus\s*lane|busway|bus only|bus bridge|\bpsp\b|shared path|cycle|bike|footpath|pedestrian|walkway|car\s*park|carpark|\bfpa\b/i.test((f.properties && f.properties.ROAD_NAME) || '');
+const truckRoad = f => !/bus\s*lane|busway|bus only|bus bridge|\bpsp\b|shared path|cycle|bike|footpath|pedestrian|walkway|car\s*park|carpark/i.test((f.properties && f.properties.ROAD_NAME) || '');
 async function loadNetwork(n, force) {
-  const key = 'v4-net-' + n, cached = !force && await cacheGet(key);
+  const key = 'v5-net-' + n, cached = !force && await cacheGet(key);
   if (cached && Date.now() - cached.t < CACHE_DAYS * 864e5) return cached;
   let rec;
   if (n === 'GEN' || n === 'OSL') { // general access: distributor roads statewide (+ local roads near each point at route time), minus Network 1 prohibited roads
