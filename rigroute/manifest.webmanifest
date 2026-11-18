@@ -1,0 +1,17 @@
+{
+  "name": "RigRoute – Heavy Vehicle Navigation",
+  "short_name": "RigRoute",
+  "description": "Smarter routes for heavier vehicles. Heavy vehicle navigation for Western Australia.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101418",
+  "theme_color": "#101418",
+  "categories": ["navigation", "travel", "business"],
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

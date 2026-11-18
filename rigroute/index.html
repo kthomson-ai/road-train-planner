@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>RigRoute – Smarter routes for heavier vehicles</title>
+<meta name="description" content="Heavy vehicle navigation for Western Australia: routes on Main Roads approved networks, low-bridge avoidance, permits, live road alerts and truck stops.">
+<meta name="theme-color" content="#101418">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/favicon-64.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="css/rigroute.css">
+</head>
+<body>
+<div class="splash" id="splash"><div class="in"><img src="img/icon-192.png" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
+
+<div id="map" aria-label="Map"></div>
+
+<!-- top: search + vehicle -->
+<div class="topbar">
+  <div class="search">
+    <img src="img/icon-192.png" alt="RigRoute">
+    <input id="q" type="search" placeholder="Where to?" autocomplete="off" enterkeyhint="search" aria-label="Search destination">
+    <button class="vchip" id="vchip" aria-label="Change vehicle"><span class="vi" data-icon="truck"></span><div><b id="vchipName">Vehicle</b><small id="vchipSub"></small></div></button>
+  </div>
+</div>
+<div class="suggest" id="suggest" role="listbox"></div>
+<div class="livepill" id="livepill"></div>
+
+<!-- floating controls -->
+<button class="planbtn" id="planBtn"><span data-icon="route"></span>Plan route</button>
+<div class="fabs">
+  <button class="fab" id="fabLayers" aria-label="Map layers" title="Map layers"><span data-icon="layers"></span></button>
+  <button class="fab" id="fabAlerts" aria-label="Road alerts" title="Road alerts"><span data-icon="alert"></span><span class="badge" id="alertBadge" hidden>0</span></button>
+  <button class="fab" id="fabLocate" aria-label="My location" title="My location"><span data-icon="locate"></span></button>
+</div>
+
+<!-- sheets -->
+<section class="sheet" id="sheet-plan" aria-label="Plan route">
+  <div class="grab"></div>
+  <header><h2>Plan route</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
+  <div class="body">
+    <div class="card">
+      <h3>Trip</h3>
+      <div class="wp start"><span class="pin"></span><div class="row"><input class="inp" id="from" placeholder="Start: town, address or place" autocomplete="off"><button class="iconbtn" data-mic="from" aria-label="Say the start"><span data-icon="mic"></span></button><button class="iconbtn" id="useLoc" aria-label="Use my location"><span data-icon="locate"></span></button></div><div id="fromChoices"></div></div>
+      <div id="stops"></div>
+      <div style="padding-left:28px;margin:-4px 0 6px;display:flex;gap:16px"><button class="link" id="addStop">+ Add stop</button><button class="link" id="optStops" hidden>Optimise order</button></div>
+      <div class="wp end last"><span class="pin"></span><div class="row"><input class="inp" id="to" placeholder="Destination" autocomplete="off"><button class="iconbtn" data-mic="to" aria-label="Say the destination"><span data-icon="mic"></span></button></div><div id="toChoices"></div></div>
+    </div>
+    <div class="card">
+      <h3>Vehicle <button class="link" id="planEditVeh">Change</button></h3>
+      <div class="vcard on" id="planVeh" style="margin:0"></div>
+      <div class="grid3" style="margin-top:12px">
+        <div class="unit" data-u="m"><label class="lab" for="pH">Height</label><input class="inp" id="pH" type="number" step="0.01" inputmode="decimal"></div>
+        <div class="unit" data-u="m"><label class="lab" for="pW">Width</label><input class="inp" id="pW" type="number" step="0.01" inputmode="decimal"></div>
+        <div class="unit" data-u="m"><label class="lab" for="pL">Length</label><input class="inp" id="pL" type="number" step="0.1" inputmode="decimal"></div>
+      </div>
+      <div class="grid2" style="margin-top:10px">
+        <div class="unit" data-u="t"><label class="lab" for="pM">Total mass (GCM)</label><input class="inp" id="pM" type="number" step="0.5" inputmode="decimal" placeholder="optional"></div>
+        <div><label class="lab">Dangerous goods</label><label class="toggle" style="border:0;padding:10px 0"><span><b style="font-size:14px">Placarded</b></span><span class="switch"><input type="checkbox" id="pDG"><i></i></span></label></div>
+      </div>
+      <div class="hint">Load dimensions for this trip. They start from the vehicle profile.</div>
+      <div id="planPermit" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <h3>Route preferences</h3>
+      <label class="toggle"><span><b>Avoid unsealed roads</b><small>Where a sealed option exists</small></span><span class="switch"><input type="checkbox" id="prefUnsealed" checked><i></i></span></label>
+      <label class="toggle"><span><b>Prefer highways</b><small>Fewer local streets</small></span><span class="switch"><input type="checkbox" id="prefHwy" checked><i></i></span></label>
+      <label class="toggle"><span><b>Avoid live road closures</b><small>Main Roads Travel Map data</small></span><span class="switch"><input type="checkbox" id="prefClosures" checked><i></i></span></label>
+    </div>
+    <div class="status" id="planStatus"></div>
+    <button class="btn primary big block" id="go" disabled><span data-icon="route"></span>Find truck route</button>
+  </div>
+</section>
+
+<section class="sheet half" id="sheet-route" aria-label="Route details">
+  <div class="grab"></div>
+  <header><button class="iconbtn" id="routeBack" aria-label="Back to planning"><span data-icon="back"></span></button><h2 id="routeTitle">Route</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
+  <div class="body" id="routeBody"></div>
+</section>
+
+<section class="sheet half" id="sheet-alerts" aria-label="Road alerts">
+  <div class="grab"></div>
+  <header><h2>Road alerts</h2><span class="tag live" id="alertsLive">Live</span><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
+  <div class="body">
+    <div class="chips" id="alertScope" style="margin-bottom:10px"></div>
+    <div class="chips" id="alertCats" style="margin-bottom:12px"></div>
+    <div class="card" style="padding:4px 14px"><ul class="alist" id="alertList"></ul></div>
+    <div class="hint" id="alertNote"></div>
+  </div>
+</section>
+
+<section class="sheet half" id="sheet-stops" aria-label="Truck stops">
+  <div class="grab"></div>
+  <header><h2>Truck stops</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
+  <div class="body">
+    <div class="chips" id="stopScope" style="margin-bottom:10px"></div>
+    <div class="chips" id="stopCats" style="margin-bottom:12px"></div>
+    <div class="card" style="padding:4px 14px"><ul class="alist" id="stopList"></ul></div>
+    <div class="hint" id="stopNote"></div>
+  </div>
+</section>
+
+<section class="sheet" id="sheet-profile" aria-label="Vehicle profiles">
+  <div class="grab"></div>
+  <header><h2>Vehicles</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
+  <div class="body">
+    <div id="vehList"></div>
+    <button class="btn block" id="vehAdd"><span data-icon="plus"></span>Add vehicle</button>
+    <div class="card" style="margin-top:16px">
+      <h3>Settings</h3>
+      <label class="toggle"><span><b>Voice guidance</b><small>Spoken turns and warnings</small></span><span class="switch"><input type="checkbox" id="setVoice" checked><i></i></span></label>
+      <label class="toggle"><span><b>Show approved network</b><small>For the selected vehicle</small></span><span class="switch"><input type="checkbox" id="setNet" checked><i></i></span></label>
+      <div class="toggle" style="cursor:default"><span><b>Map data</b><small id="dataInfo">Loading…</small></span><button class="btn" id="refresh" style="height:40px">Refresh</button></div>
+    </div>
+    <div class="card"><h3>About</h3><div style="font-size:13px;color:var(--muted)">
+      <b style="color:var(--text)">RigRoute 1.0 (preview)</b><br>Planning and navigation aid only. Always follow road signs, your notice or permit, and the official <a href="https://mrwebapps.mainroads.wa.gov.au/hvsnetworkmap" target="_blank" rel="noopener">Main Roads RAV Map</a>.<br><br>
+      Networks, structures, rest areas, closures, incidents and roadworks: Main Roads Western Australia (CC BY 4.0), loaded live. Places: Google. Map: CARTO / OpenStreetMap contributors, Google. Fire and emergency warnings: see <a href="https://www.emergency.wa.gov.au" target="_blank" rel="noopener">Emergency WA</a>.</div></div>
+  </div>
+</section>
+
+<section class="sheet" id="sheet-vedit" aria-label="Edit vehicle">
+  <div class="grab"></div>
+  <header><button class="iconbtn" id="veBack" aria-label="Back"><span data-icon="back"></span></button><h2 id="veTitle">Vehicle</h2></header>
+  <div class="body">
+    <div class="card">
+      <div class="field"><label for="veName">Name</label><input class="inp" id="veName" placeholder="e.g. Kenworth T909 + doubles"></div>
+      <div class="field"><label for="veType">Vehicle type</label><select class="inp" id="veType"></select></div>
+      <div class="field"><label for="veNet">Approved network</label><select class="inp" id="veNet"></select><div class="hint">Use the network on your RAV notice or permit.</div></div>
+    </div>
+    <div class="card"><h3>Dimensions</h3>
+      <div class="grid3"><div class="unit" data-u="m"><label class="lab" for="veH">Height</label><input class="inp" id="veH" type="number" step="0.01" inputmode="decimal"></div><div class="unit" data-u="m"><label class="lab" for="veW">Width</label><input class="inp" id="veW" type="number" step="0.01" inputmode="decimal"></div><div class="unit" data-u="m"><label class="lab" for="veL">Length</label><input class="inp" id="veL" type="number" step="0.1" inputmode="decimal"></div></div>
+    </div>
+    <div class="card"><h3>Mass and axles</h3>
+      <div class="grid2"><div class="unit" data-u="t"><label class="lab" for="veGVM">GVM</label><input class="inp" id="veGVM" type="number" step="0.5" inputmode="decimal"></div><div class="unit" data-u="t"><label class="lab" for="veGCM">GCM</label><input class="inp" id="veGCM" type="number" step="0.5" inputmode="decimal"></div></div>
+      <div class="grid2" style="margin-top:10px"><div><label class="lab" for="veAxles">Number of axles</label><input class="inp" id="veAxles" type="number" step="1" inputmode="numeric"></div><div class="unit" data-u="t"><label class="lab" for="veAxleLim">Heaviest axle group</label><input class="inp" id="veAxleLim" type="number" step="0.5" inputmode="decimal"></div></div>
+    </div>
+    <div class="card"><h3>Configuration</h3>
+      <div class="field"><label for="veTrailer">Trailer / road train configuration</label><input class="inp" id="veTrailer" placeholder="e.g. Semi + dolly + semi"></div>
+      <div class="field"><label for="veOS">Oversize classification</label><select class="inp" id="veOS"><option value="none">Not oversize</option><option value="class1">Class 1 RAV oversize (period permit)</option><option value="single">Single trip permit</option><option value="class3">Class 3 oversize prime mover / trailer</option></select></div>
+      <label class="toggle"><span><b>Placarded dangerous goods</b><small>Avoids the Northbridge Tunnel</small></span><span class="switch"><input type="checkbox" id="veDG"><i></i></span></label>
+    </div>
+    <div id="vePermit"></div>
+    <div style="display:flex;gap:10px"><button class="btn ghost" id="veDel" style="color:var(--red)">Delete</button><button class="btn primary" id="veSave" style="flex:1">Save vehicle</button></div>
+  </div>
+</section>
+
+<!-- bottom navigation -->
+<nav class="tabbar" aria-label="Main">
+  <button class="tab on" data-tab="map"><span data-icon="map"></span>Map</button>
+  <button class="tab" data-tab="plan"><span data-icon="route"></span>Plan Route</button>
+  <button class="tab" data-tab="alerts"><span data-icon="alert"></span>Alerts<i class="dot" id="tabAlertDot" hidden></i></button>
+  <button class="tab" data-tab="stops"><span data-icon="fuel"></span>Truck Stops</button>
+  <button class="tab" data-tab="profile"><span data-icon="truck"></span>Profile</button>
+</nav>
+
+<!-- driving mode -->
+<div id="navbar"><div class="na" id="nArrow">↑</div><div class="nd" id="nDist"></div><div class="ni" id="nInstr"></div></div>
+<div id="flash"></div>
+<div id="junc"><div class="jl" id="jLabel"></div><svg id="jSvg" viewBox="-70 -70 140 140" preserveAspectRatio="xMidYMid slice"></svg><div class="jd" id="jDist"></div><div class="jbar"><i id="jBar"></i></div></div>
+<div id="navbot"><span class="eta" id="nEta"></span><button id="nMute" aria-label="Mute">🔊</button><button id="nCentre" aria-label="Recentre">⌖</button><button class="stop" id="nStop">End</button></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.16.0/dist/Leaflet.GoogleMutant.js"></script>
+<script src="js/core.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/services/config.js"></script>
+<script src="js/services/store.js"></script>
+<script src="js/services/mainroads.js"></script>
+<script src="js/services/google.js"></script>
+<script src="js/services/vehicles.js"></script>
+<script src="js/services/routing.js"></script>
+<script src="js/services/alerts.js"></script>
+<script src="js/ui/icons.js"></script>
+<script src="js/ui/map.js"></script>
+<script src="js/ui/app.js"></script>
+</body>
+</html>
