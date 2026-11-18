@@ -3,6 +3,7 @@ RR.alerts = (() => {
   const CATS = [
     { key: 'all', label: 'All' },
     { key: 'closure', label: 'Road closures', icon: 'block', tone: 'red' },
+    { key: 'incident', label: 'Incidents', icon: 'crash', tone: 'amber' },
     { key: 'flood', label: 'Flooding', icon: 'water', tone: 'blue' },
     { key: 'fire', label: 'Fire', icon: 'fire', tone: 'red' },
     { key: 'roadworks', label: 'Roadworks', icon: 'cone', tone: 'amber' },
@@ -17,17 +18,19 @@ RR.alerts = (() => {
   // live Main Roads item -> category
   function classify(a) {
     const t = `${a.type} ${a.title} ${a.status} ${a.impact}`;
-    if (/flood|water over|washout/i.test(t)) return 'flood';
-    if (/fire|smoke|burn/i.test(t)) return 'fire';
+    if (/\bflood|water over|washout|washed out/i.test(t)) return 'flood';
+    if (/\b(bush ?fire|grass ?fire|scrub ?fire|smoke|burn.?off)\b/i.test(t)) return 'fire';   // word-matched: not "Cockburn"
     if (a.src === 'roadworks') return 'roadworks';
     if (/specified conditions|restricted to|vehicles? (over|exceeding)|no heavy|heavy vehicles/i.test(t)) return 'temporary';
-    if (/clos/i.test(a.status) && !/open/i.test(a.status)) return 'closure';
-    if (a.src === 'closure') return 'temporary';
-    return a.src === 'event' ? 'temporary' : 'closure';
+    const closed = /road closed|\bclosed\b|closure/i.test(a.status) && !/open|lane/i.test(a.status);
+    if (a.src === 'closure') return closed ? 'closure' : 'temporary';
+    if (a.src === 'incident') return closed ? 'closure' : 'incident';   // breakdowns, crashes, lane blockages
+    return a.src === 'event' ? 'temporary' : 'incident';
   }
-  const severity = a => (/clos/i.test(a.status) && !/open/i.test(a.status)) || a.cat === 'fire' ? 'red' : a.cat === 'flood' ? 'blue' : 'amber';
+  const severity = a => a.cat === 'closure' || a.cat === 'fire' ? 'red' : a.cat === 'flood' ? 'blue' : 'amber';
   const firstPoint = g => g.type === 'Point' ? g.coordinates : g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.type === 'MultiLineString' ? g.coordinates[0][Math.floor(g.coordinates[0].length / 2)] : null;
-  function live(items) { return items.map(a => { const cat = classify(a); const x = { ...a, cat }; x.tone = severity(x); x.at = firstPoint(a.geom); return x; }).filter(a => a.at); }
+  // Main Roads sometimes lists the same event in more than one feed: keep one per title + category
+  function live(items) { const seen = new Set(); return items.map(a => { const cat = classify(a); const x = { ...a, cat }; x.tone = severity(x); x.at = firstPoint(a.geom); return x; }).filter(a => { if (!a.at) return false; const k = a.cat + '|' + String(a.title).toLowerCase().trim(); if (seen.has(k)) return false; seen.add(k); return true; }); }
 
   // rule-based items for the active vehicle (from Main Roads structures/bridges, permit conditions)
   function rules(profile, route) {

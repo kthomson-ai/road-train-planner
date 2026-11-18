@@ -47,7 +47,8 @@ svg.i { width: 22px; height: 22px; flex: none; }
 .fab .badge { position: absolute; top: -5px; right: -5px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--amber); color: #1a1200; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
 .fab.lime { background: var(--lime); color: var(--lime-ink); border-color: var(--lime); }
 .planbtn { position: fixed; left: 12px; bottom: calc(var(--tab-h) + var(--safe-b) + 16px); z-index: 15; height: 52px; padding: 0 20px 0 16px; border-radius: 16px; border: 0; background: var(--lime); color: var(--lime-ink); font-weight: 800; font-size: 16px; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 24px rgba(183,242,61,.25); cursor: pointer; }
-.livepill { position: fixed; left: 12px; top: calc(76px + var(--safe-t)); z-index: 14; display: flex; gap: 8px; flex-wrap: wrap; }
+.livepill { position: fixed; left: 12px; right: 12px; top: calc(76px + var(--safe-t)); z-index: 14; display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.livepill::-webkit-scrollbar { display: none; } .livepill .pill { flex: none; }
 .pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; color: var(--text); cursor: pointer; backdrop-filter: blur(6px); }
 .pill i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
@@ -73,7 +74,7 @@ svg.i { width: 22px; height: 22px; flex: none; }
   .sheet .grab { display: none; }
   .suggest { right: auto; width: 560px; }
   .topbar { right: auto; width: 560px; }
-  .livepill { left: 584px; top: calc(22px + var(--safe-t)); }
+  .livepill { left: 584px; right: 12px; top: calc(22px + var(--safe-t)); }
   body.sheet-open .planbtn { display: none; }
 }
 

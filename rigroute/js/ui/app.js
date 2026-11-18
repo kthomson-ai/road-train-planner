@@ -335,9 +335,9 @@
     RR.map.setAlerts(shown, a => { RR.map.get().setView([a.at[1], a.at[0]], 13); if (a.cat === 'report') reportPopup(a); else toast(`${a.title}: ${a.status || ''}`, 5000); });
     const n = live.filter(a => a.tone === 'red').length;
     $('alertBadge').hidden = !(live.length + reps.length); $('alertBadge').textContent = live.length + reps.length; $('tabAlertDot').hidden = !n;
-    const counts = { closure: 0, flood: 0, roadworks: 0 }; live.forEach(a => counts[a.cat] != null && counts[a.cat]++);
+    const counts = { closure: 0, incident: 0, flood: 0, fire: 0, roadworks: 0 }; live.forEach(a => counts[a.cat] != null && counts[a.cat]++);
     const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-    const pills = [['closure', 'red', pl(counts.closure, 'closure', 'closures'), haz.closure], ['flood', 'blue', pl(counts.flood, 'flood alert', 'flood alerts'), haz.flood], ['roadworks', 'amber', pl(counts.roadworks, 'roadworks site', 'roadworks sites'), haz.roadworks], ['report', 'lime', pl(reps.length, 'driver report', 'driver reports'), haz.report && reps.length]];
+    const pills = [['closure', 'red', pl(counts.closure, 'closure', 'closures'), haz.closure && counts.closure], ['incident', 'amber', pl(counts.incident, 'incident', 'incidents'), haz.closure && counts.incident], ['fire', 'red', pl(counts.fire, 'fire', 'fires'), haz.fire && counts.fire], ['flood', 'blue', pl(counts.flood, 'flood alert', 'flood alerts'), haz.flood && counts.flood], ['roadworks', 'amber', pl(counts.roadworks, 'roadworks site', 'roadworks sites'), haz.roadworks], ['report', 'lime', pl(reps.length, 'driver report', 'driver reports'), haz.report && reps.length]];
     $('livepill').innerHTML = pills.filter(p => p[3]).map(([k, c, t]) => `<span class="pill" data-p="${k}"><i style="background:var(--${c})"></i>${t}</span>`).join('');
     $('livepill').querySelectorAll('[data-p]').forEach(p => p.onclick = () => { app.alertCat = p.dataset.p; app.alertScope = 'wa'; openSheet('alerts'); });
   }
@@ -375,7 +375,7 @@
 
   // ---------- map & hazard layers ----------
   const HAZ = [
-    { key: 'closure', label: 'Closures & incidents', sub: 'Main Roads live', icon: 'block', tone: 'red', cats: ['closure', 'temporary'] },
+    { key: 'closure', label: 'Closures & incidents', sub: 'Main Roads live', icon: 'block', tone: 'red', cats: ['closure', 'temporary', 'incident'] },
     { key: 'flood', label: 'Flooding', sub: 'Main Roads live', icon: 'water', tone: 'blue', cats: ['flood'] },
     { key: 'fire', label: 'Fire', sub: 'Fire-related closures', icon: 'fire', tone: 'red', cats: ['fire'] },
     { key: 'roadworks', label: 'Roadworks', sub: 'Main Roads live', icon: 'cone', tone: 'amber', cats: ['roadworks'] },
