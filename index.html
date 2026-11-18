@@ -909,10 +909,12 @@ $('optStops').onclick = async () => {
   if (run.ids.length < 4) { status('Add at least two stops to optimise.'); return; }
   status('Working out the quickest stop order…'); await new Promise(r => setTimeout(r, 30));
   const res = RAV.optimiseOrder(G, run.pts);
-  const stopsUsed = run.ids.slice(1, -1), reordered = res.order.map(k => stopsUsed[k]);
-  const empty = stopIds.filter(id => !$(id).value.trim()); stopIds = reordered.concat(empty);
-  stopIds.forEach(x => $('stops').appendChild($('row-' + x))); renumberStops();
   const saved = (res.before - res.secs) / 60;
+  if (saved > 1) { // only reorder when it actually helps; ties keep the driver's order
+    const stopsUsed = run.ids.slice(1, -1), reordered = res.order.map(k => stopsUsed[k]);
+    const empty = stopIds.filter(id => !$(id).value.trim()); stopIds = reordered.concat(empty);
+    stopIds.forEach(x => $('stops').appendChild($('row-' + x))); renumberStops();
+  }
   NOTE = saved > 1 ? `Reordered stops: saves about ${Math.round(saved)} min.` : 'Stops were already in the best order.';
   $('go').click();
 };
