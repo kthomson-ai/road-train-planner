@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WA Road Train Route Planner (prototype)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.16.0/dist/Leaflet.GoogleMutant.js"></script>
+<style>
+  :root { --ink:#1d2329; --muted:#5f6b76; --line:#d9dee3; --bg:#f4f6f8; --accent:#0b62d6; --warn:#b45309; --bad:#b91c1c; --ok:#15803d; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  .app { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
+  aside { overflow-y: auto; background: #fff; border-right: 1px solid var(--line); padding: 14px 16px 24px; }
+  #map { height: 100%; }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 12px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .03em; }
+  select, input[type=text] { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
+  .row { display: flex; gap: 6px; }
+  .row input { flex: 1; }
+  button { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; width: 100%; padding: 11px; margin-top: 12px; }
+  button:disabled { opacity: .55; cursor: default; }
+  button.small { font-size: 12.5px; padding: 5px 8px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+  .choices { border: 1px solid var(--line); border-radius: 8px; margin-top: 4px; overflow: hidden; }
+  .choices div { padding: 7px 10px; font-size: 13px; cursor: pointer; border-top: 1px solid var(--line); }
+  .choices div:first-child { border-top: 0; }
+  .choices div:hover { background: #eef4fd; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 14px; }
+  .big { font-size: 22px; font-weight: 700; }
+  .warn { background: #fff7ed; border-color: #fcd9b6; color: #7c2d12; }
+  .bad { background: #fef2f2; border-color: #fecaca; color: #7f1d1d; }
+  .sect { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 16px 0 6px; display: flex; justify-content: space-between; align-items: center; }
+  ol.steps { list-style: none; padding: 0; margin: 0; }
+  ol.steps li { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; padding: 8px 4px; border-top: 1px solid var(--line); cursor: pointer; }
+  ol.steps li:hover { background: #f7f9fb; }
+  .arrow { font-size: 18px; text-align: center; }
+  .dist { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .cond { font-size: 13px; padding: 8px 10px; border-left: 3px solid var(--warn); background: #fffaf3; margin: 6px 0; border-radius: 0 6px 6px 0; cursor: pointer; }
+  .cond.hard { border-left-color: var(--bad); background: #fff5f5; }
+  .cond b { display: block; font-size: 12.5px; }
+  .toggles { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; margin-top: 10px; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; font-size: 12.5px; padding: 5px 9px; }
+  .seg button.on { background: var(--ink); color: #fff; }
+  .legend { font-size: 12px; color: var(--muted); display: flex; gap: 12px; margin-top: 6px; }
+  .sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  .foot { font-size: 11.5px; color: var(--muted); margin-top: 22px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .foot a { color: var(--muted); }
+  .mic { min-width: 42px; }
+  .mic.on { background: #fde2e2; border-color: #f5a3a3; }
+  .drive { display: flex; gap: 8px; margin-top: 10px; }
+  .drive button.go { flex: 1; background: #15803d; border-color: #15803d; color: #fff; font-weight: 700; padding: 12px; font-size: 16px; }
+  #navbar, #navbot, #flash { display: none; }
+  body.driving #navbar { display: grid; grid-template-columns: 64px 1fr; gap: 4px 12px; align-items: center; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: #0f3d2e; color: #fff; padding: 12px 16px calc(12px + env(safe-area-inset-top, 0)); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+  #navbar .na { grid-row: span 2; font-size: 46px; text-align: center; line-height: 1; }
+  #navbar .nd { font-size: 30px; font-weight: 800; line-height: 1.05; }
+  #navbar .ni { font-size: 17px; opacity: .95; }
+  body.driving #flash { position: fixed; top: 112px; left: 10px; right: 10px; z-index: 1000; background: #fff7ed; color: #7c2d12; border: 1px solid #fcd9b6; border-radius: 10px; padding: 10px 12px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  body.driving #navbot { display: flex; gap: 8px; align-items: center; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; background: #fff; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0)); box-shadow: 0 -2px 10px rgba(0,0,0,.2); }
+  #navbot .eta { flex: 1; font-weight: 700; font-size: 17px; }
+  #navbot button { padding: 10px 12px; font-size: 15px; }
+  #navbot .stop { background: #b91c1c; border-color: #b91c1c; color: #fff; font-weight: 700; }
+  body.driving .app { grid-template-columns: 1fr; }
+  body.driving aside { display: none; }
+  body.driving #map { height: 100vh; position: static; }
+  @media (max-width: 800px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 55vh; height: auto; }
+    aside { border-right: 0; order: 1; }
+    #map { order: 0; height: 55vh; position: sticky; top: 0; z-index: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>WA Road Train Route Planner</h1>
+    <div class="sub">Prototype v0.4 (voice + driving mode) · routes only on Main Roads WA approved RAV networks</div>
+
+    <label for="net">Vehicle / approved network</label>
+    <select id="net">
+      <option value="6">Network 6 · 36.5 m road train (Category 6)</option>
+      <option value="7" selected>Network 7 · 36.5 m double road train (Category 7)</option>
+      <option value="8">Network 8 · 36.5 m truck and two dogs (Category 8)</option>
+      <option value="9">Network 9 · 45–53.5 m triples (Category 9)</option>
+      <option value="10">Network 10 · 53.5 m triple road train (Category 10)</option>
+    </select>
+    <div class="hint">Pick the Tandem Drive network your RAV category is approved for.</div>
+
+    <label for="from">Start</label>
+    <div class="row"><input id="from" type="text" placeholder="Town, address or lat,lon"><button class="mic" data-mic="from" title="Say the start">🎤</button><button id="gps" title="Use my location">📍</button></div>
+    <div id="fromChoices"></div>
+
+    <label for="to">Destination</label>
+    <div class="row"><input id="to" type="text" placeholder="Town, address or lat,lon"><button class="mic" data-mic="to" title="Say the destination">🎤</button></div>
+    <div id="toChoices"></div>
+
+    <div class="toggles">
+      <span>Tap map to set:</span>
+      <span class="seg"><button data-pick="from">Start</button><button data-pick="to">Destination</button><button data-pick="" class="on">Off</button></span>
+    </div>
+
+    <button id="go" class="primary" disabled>Loading network…</button>
+    <div class="status" id="status"></div>
+    <div class="hint" id="gnote"></div>
+    <div id="blocked" class="card bad" style="display:none"><b>This page can't reach the internet from here.</b><br>If you opened it inside the Claude app or another preview, download the file and open it in Chrome (or Edge) instead. It needs to reach Main Roads WA and the address search.</div>
+
+    <div id="result"></div>
+
+    <div class="toggles">
+      <label style="all:unset;cursor:pointer"><input type="checkbox" id="showNet" checked> Show approved network</label>
+      <button class="small" id="refresh">Refresh Main Roads data</button>
+    </div>
+    <div class="legend" style="flex-wrap:wrap"><span><i class="sw" style="background:#2e9d5b"></i>Approved</span><span><i class="sw" style="background:#e08a1e"></i>Approved with conditions</span><span><i class="sw" style="background:#0b62d6"></i>Route</span><span><b style="background:#1d2329;color:#fff;font-size:9px;padding:1px 3px;border-radius:3px">RTAA</b> Assembly area</span></div>
+
+    <div class="foot">
+      <b>Planning aid only.</b> Always check the official <a href="https://mrwebapps.mainroads.wa.gov.au/hvsnetworkmap" target="_blank" rel="noopener">Main Roads RAV Map</a>, your notice or permit, and current road conditions. Turn restrictions are read from text and may be missed. Roads off the approved network need road-owner approval.<br><br>
+      Network data: Main Roads Western Australia (CC BY 4.0), loaded live. Routing: this app, using Main Roads data (not Google). Map and address search: Google Maps, with Esri and OpenStreetMap Nominatim as backup.
+      <div id="dataInfo"></div>
+    </div>
+  </aside>
+  <div id="map"></div>
+</div>
+<div id="navbar"><div class="na" id="nArrow">↑</div><div class="nd" id="nDist"></div><div class="ni" id="nInstr"></div></div>
+<div id="flash"></div>
+<div id="navbot"><span class="eta" id="nEta"></span><button id="nMute">🔊</button><button id="nCentre">⌖</button><button class="stop" id="nStop">Stop</button></div>
+
+<script>
+// ===== RAV routing core (no DOM) =====
+const RAV = (() => {
+  const R = 6371008.8, D2R = Math.PI / 180;
+  function hav(a, b) { // [lon,lat]
+    const dLat = (b[1] - a[1]) * D2R, dLon = (b[0] - a[0]) * D2R;
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * D2R) * Math.cos(b[1] * D2R) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
+  function bearing(a, b) {
+    const y = Math.sin((b[0] - a[0]) * D2R) * Math.cos(b[1] * D2R);
+    const x = Math.cos(a[1] * D2R) * Math.sin(b[1] * D2R) - Math.sin(a[1] * D2R) * Math.cos(b[1] * D2R) * Math.cos((b[0] - a[0]) * D2R);
+    return (Math.atan2(y, x) / D2R + 360) % 360;
+  }
+  const turnDelta = (bin, bout) => ((bout - bin + 540) % 360) - 180; // <0 left, >0 right
+  // local planar projection (metres) around a latitude
+  const kx = lat => 111320 * Math.cos(lat * D2R), KY = 110574;
+  function projPointSeg(p, a, b) { // returns {d, t}
+    const cx = kx(p[1]);
+    const ax = (a[0] - p[0]) * cx, ay = (a[1] - p[1]) * KY, bx = (b[0] - p[0]) * cx, by = (b[1] - p[1]) * KY;
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    let t = L2 ? -(ax * dx + ay * dy) / L2 : 0; t = Math.max(0, Math.min(1, t));
+    const x = ax + t * dx, y = ay + t * dy;
+    return { d: Math.hypot(x, y), t };
+  }
+  const normName = s => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\b(road|rd|street|st|highway|hwy|drive|dr|avenue|ave|av|way|wy|lane|ln|place|pl|terrace|tce|parade|pde|crescent|cres|court|ct|boulevard|bvd|blvd|north|south|east|west|nth|sth|n|s|e|w|access|the)\b/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  const namesMatch = (a, b) => { a = normName(a); b = normName(b); return !!a && !!b && (a === b || a.startsWith(b) || b.startsWith(a)); };
+  const stripHtml = s => (s || '').replace(/<\/li>/gi, '\n').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"').split('\n').map(x => x.trim()).filter(Boolean);
+  const NOT_THROUGH = /not be used as a through route|local (access|delivery)|access to local properties/i;
+
+  // ---- spatial grid ----
+  function Grid(cell) { this.cell = cell; this.m = new Map(); }
+  Grid.prototype.key = function (lon, lat) { return Math.floor(lon / this.cell) + ':' + Math.floor(lat / this.cell); };
+  Grid.prototype.add = function (lon, lat, v) { const k = this.key(lon, lat); let a = this.m.get(k); if (!a) this.m.set(k, a = []); a.push(v); };
+  Grid.prototype.near = function (lon, lat, r) { // r in cells
+    const cx = Math.floor(lon / this.cell), cy = Math.floor(lat / this.cell), out = [];
+    for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) { const a = this.m.get((cx + i) + ':' + (cy + j)); if (a) for (const v of a) out.push(v); }
+    return out;
+  };
+
+  // ---- graph build ----
+  // features: GeoJSON features (LineString/MultiLineString) with props ROAD_NAME, CONDITION, CURFEW, MAX_SPEED, COMMENTS
+  // turnRules: GeoJSON point features with props CONDITION, NODE_DESCR
+  function build(features, turnRules, bridges, opts = {}) {
+    const healM = opts.healMetres ?? 25;
+    // vertices within ~1.5 m are merged (source data has sub-metre mismatches at joins)
+    const idx = new Map(), coords = [], vadj = []; // vertex graph
+    const node = c => {
+      const gx = Math.round(c[0] * 1e5), gy = Math.round(c[1] * 1e5);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        const i = idx.get((gx + dx) + ',' + (gy + dy));
+        if (i !== undefined && Math.abs(coords[i][0] - c[0]) < 1.6e-5 && Math.abs(coords[i][1] - c[1]) < 1.4e-5) return i;
+      }
+      const i = coords.length; idx.set(gx + ',' + gy, i); coords.push([+c[0].toFixed(6), +c[1].toFixed(6)]); vadj.push([]); return i;
+    };
+    const feats = features.map(f => {
+      const p = f.properties || {};
+      const conds = [...stripHtml(p.CONDITION), ...stripHtml(p.COMMENTS)];
+      if (p.CURFEW) conds.push('Curfew: ' + stripHtml(p.CURFEW).join(' '));
+      const ms = parseFloat(p.MAX_SPEED);
+      if (p.MAX_SPEED && !conds.some(c => /speed/i.test(c))) conds.push('Max speed ' + stripHtml(String(p.MAX_SPEED)).join(' ') + (isNaN(ms) ? '' : ' km/h'));
+      return { name: p.ROAD_NAME || 'Unnamed road', conds, notThrough: conds.some(c => NOT_THROUGH.test(c)), speed: (!isNaN(ms) && ms > 10 && ms < 120) ? ms : null, state: /state/i.test(p.NETWORK_TYPE || ''), unsealed: conds.some(c => /unsealed/i.test(c)) };
+    });
+    features.forEach((f, fi) => {
+      const g = f.geometry; if (!g) return;
+      const lines = g.type === 'MultiLineString' ? g.coordinates : g.type === 'LineString' ? [g.coordinates] : [];
+      for (const L of lines) for (let k = 1; k < L.length; k++) {
+        const a = node(L[k - 1]), b = node(L[k]); if (a === b) continue;
+        vadj[a].push([b, fi]); vadj[b].push([a, fi]);
+      }
+    });
+    // heal: connect dead ends to nearest vertex of a different feature within healM
+    const cellDeg = 0.002, grid = new Grid(cellDeg);
+    coords.forEach((c, i) => grid.add(c[0], c[1], i));
+    let healed = 0;
+    for (let i = 0; i < coords.length; i++) {
+      if (vadj[i].length !== 1) continue;
+      // vertices already close along the graph (same line, a few steps back) don't count
+      const near = new Set([i]); let fr = [i];
+      for (let h = 0; h < 6; h++) { const nf = []; for (const u of fr) for (const [w] of vadj[u]) if (!near.has(w)) { near.add(w); nf.push(w); } fr = nf; }
+      let best = -1, bd = healM;
+      for (const j of grid.near(coords[i][0], coords[i][1], 1)) {
+        if (near.has(j)) continue;
+        const d = hav(coords[i], coords[j]); if (d < bd) { bd = d; best = j; }
+      }
+      if (best >= 0) { vadj[i].push([best, -1]); vadj[best].push([i, -1]); healed++; }
+    }
+    // contract to junction graph: junction = degree != 2, or feature changes, or rule point
+    const nV = coords.length, isJ = new Uint8Array(nV);
+    for (let i = 0; i < nV; i++) { const a = vadj[i]; if (a.length !== 2 || a[0][1] !== a[1][1]) isJ[i] = 1; }
+    // rule points -> force junction at nearest vertex
+    const rules = [];
+    for (const r of (turnRules || [])) {
+      const c = r.geometry && r.geometry.coordinates; if (!c) continue;
+      let best = -1, bd = 40;
+      for (const j of grid.near(c[0], c[1], 1)) { if (vadj[j].length < 3) continue; const d = hav(c, coords[j]); if (d < bd) { bd = d; best = j; } }
+      const text = stripHtml(r.properties.CONDITION).join(' ');
+      const parsed = parseRule(text);
+      rules.push({ v: best, text, where: r.properties.NODE_DESCR, at: c, parsed });
+      if (best >= 0) isJ[best] = 1;
+    }
+    const jId = new Int32Array(nV).fill(-1), J = [];
+    for (let i = 0; i < nV; i++) if (isJ[i]) { jId[i] = J.length; J.push(i); }
+    // edges (undirected chains), directed ids: 2e (a->b), 2e+1 (b->a)
+    const E = []; const seen = new Set();
+    for (const s of J) for (const [n1, f1] of vadj[s]) {
+      const pk = s < n1 ? s + '_' + n1 : n1 + '_' + s; if (seen.has(pk + '_' + f1)) continue;
+      const path = [s]; let prev = s, cur = n1, len = hav(coords[s], coords[n1]); seen.add(pk + '_' + f1);
+      let guard = 0;
+      while (!isJ[cur] && guard++ < 1e6) {
+        path.push(cur);
+        const nx = vadj[cur][0][0] === prev ? vadj[cur][1] : vadj[cur][0];
+        const k2 = cur < nx[0] ? cur + '_' + nx[0] : nx[0] + '_' + cur; seen.add(k2 + '_' + nx[1]);
+        len += hav(coords[cur], coords[nx[0]]); prev = cur; cur = nx[0];
+      }
+      if (cur === s && path.length < 2) continue;
+      path.push(cur);
+      const f = f1;
+      E.push({ a: jId[s], b: jId[cur], path, len, f });
+    }
+    // adjacency of directed edges out of junction
+    const out = J.map(() => []);
+    E.forEach((e, i) => { out[e.a].push(2 * i); out[e.b].push(2 * i + 1); });
+    // attach rules to junctions
+    const jRules = new Map();
+    for (const r of rules) if (r.v >= 0 && r.parsed) { const j = jId[r.v]; if (!jRules.has(j)) jRules.set(j, []); jRules.get(j).push(r); }
+    // segment grid for snapping
+    const sgrid = new Grid(0.01);
+    E.forEach((e, ei) => { for (let k = 1; k < e.path.length; k++) { const a = coords[e.path[k - 1]], b = coords[e.path[k]]; sgrid.add((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, ei * 1e6 + k); } });
+    // long segments may cross several cells: also index endpoints
+    E.forEach((e, ei) => { for (let k = 1; k < e.path.length; k++) { const a = coords[e.path[k - 1]], b = coords[e.path[k]]; const L = hav(a, b); if (L > 800) { const n = Math.ceil(L / 800); for (let s = 1; s < n; s++) sgrid.add(a[0] + (b[0] - a[0]) * s / n, a[1] + (b[1] - a[1]) * s / n, ei * 1e6 + k); } } });
+    const brs = (bridges || []).filter(b => b.geometry).map(b => ({ at: b.geometry.coordinates, props: b.properties }));
+    return { coords, feats, E, J, out, jRules, rules, sgrid, healed, brs, nVert: nV };
+  }
+
+  function parseRule(t) {
+    const tf = /no\s+access\s+to\s+or\s+from\s+(.+?)\.?$/i.exec(t);
+    if (tf) return { kind: 'tofrom', road: tf[1].replace(/\.$/, '') };
+    const m = /no\s+(left|right|u)[\s-]*turns?\b.*?(?:into|onto|to)\s+(.+?)\s+from\s+(.+?)\.?$/i.exec(t)
+      || /no\s+(access|entry|through)\b.*?(?:into|onto|to)\s+(.+?)\s+from\s+(.+?)\.?$/i.exec(t);
+    if (!m) return null;
+    return { kind: m[1].toLowerCase(), into: m[2].replace(/\.$/, ''), from: m[3].replace(/\.$/, '') };
+  }
+
+  // directed edge helpers
+  const dirPath = (G, d) => { const e = G.E[d >> 1]; return (d & 1) ? e.path.slice().reverse() : e.path; };
+  const head = (G, d) => { const e = G.E[d >> 1]; return (d & 1) ? e.a : e.b; };
+  const tail = (G, d) => { const e = G.E[d >> 1]; return (d & 1) ? e.b : e.a; };
+  function endBearing(G, d) { const p = dirPath(G, d); const n = p.length; const end = G.coords[p[n - 1]]; let k = n - 2, acc = 0; while (k > 0 && (acc = hav(G.coords[p[k]], end)) < 30) k--; return bearing(G.coords[p[k]], end); }
+  function startBearing(G, d) { const p = dirPath(G, d); const st = G.coords[p[0]]; let k = 1; while (k < p.length - 1 && hav(st, G.coords[p[k]]) < 30) k++; return bearing(st, G.coords[p[k]]); }
+  const nameOfEdge = (G, d) => { const f = G.E[d >> 1].f; return f >= 0 ? G.feats[f].name : ''; };
+
+  function banned(G, din, dout) {
+    if ((din ^ 1) === dout) return true; // no U-turn back along same edge
+    const j = head(G, din); const rs = G.jRules.get(j); if (!rs) return false;
+    const nin = nameOfEdge(G, din), nout = nameOfEdge(G, dout);
+    for (const r of rs) {
+      const p = r.parsed;
+      if (p.kind === 'tofrom') { if (nin !== nout && (namesMatch(nin, p.road) || namesMatch(nout, p.road)) && !(namesMatch(nin, p.road) && namesMatch(nout, p.road))) return true; continue; }
+      if (!namesMatch(nin, p.from) || !namesMatch(nout, p.into)) continue;
+      if (p.kind === 'access' || p.kind === 'entry' || p.kind === 'through' || p.kind === 'u') return true;
+      const td = turnDelta(endBearing(G, din), startBearing(G, dout));
+      if (p.kind === 'left' && td < -20) return true;
+      if (p.kind === 'right' && td > 20) return true;
+    }
+    return false;
+  }
+
+  // planning speed (km/h): posted RAV limit if given, else 90 on state roads, 70 on local roads
+  const speedOf = f => !f ? 60 : f.speed ? Math.min(f.speed, 90) : f.state ? 90 : 70;
+  function edgeCost(G, ei, len, endpointEdges) {
+    const e = G.E[ei]; const f = e.f >= 0 ? G.feats[e.f] : null;
+    let c = len / (speedOf(f) / 3.6);
+    if (f && f.conds.length) c *= 1.25; // prefer roads without conditions
+    if (f && f.notThrough && !endpointEdges.has(ei)) c *= 25;
+    return c;
+  }
+
+  function snap(G, p, maxM = 50000) {
+    let best = null;
+    const test = code => { const ei = Math.floor(code / 1e6), k = code % 1e6, e = G.E[ei]; const pr = projPointSeg(p, G.coords[e.path[k - 1]], G.coords[e.path[k]]); if (!best || pr.d < best.d) best = { d: pr.d, ei, k, t: pr.t }; };
+    let r = 1;
+    for (; r <= 64; r *= 2) { for (const c of G.sgrid.near(p[0], p[1], r)) test(c); if (best) break; }
+    if (best && r <= 64) for (const c of G.sgrid.near(p[0], p[1], r * 2 + 1)) test(c); // nearer segment may sit in an outer ring
+    if (!best || best.d > maxM) return null;
+    const e = G.E[best.ei], a = G.coords[e.path[best.k - 1]], b = G.coords[e.path[best.k]];
+    const pt = [a[0] + (b[0] - a[0]) * best.t, a[1] + (b[1] - a[1]) * best.t];
+    let toA = hav(pt, a); for (let k = best.k - 1; k > 0; k--) toA += hav(G.coords[e.path[k]], G.coords[e.path[k - 1]]);
+    return { ...best, pt, toA, toB: Math.max(0, e.len - toA) };
+  }
+
+  // binary heap
+  function Heap() { this.k = []; this.v = []; }
+  Heap.prototype.push = function (key, val) { const k = this.k, v = this.v; let i = k.length; k.push(key); v.push(val); while (i > 0) { const p = (i - 1) >> 1; if (k[p] <= key) break; k[i] = k[p]; v[i] = v[p]; i = p; } k[i] = key; v[i] = val; };
+  Heap.prototype.pop = function () { const k = this.k, v = this.v, top = v[0], tk = k[0]; const lk = k.pop(), lv = v.pop(); const n = k.length; if (n) { let i = 0; while (true) { let l = 2 * i + 1, r = l + 1, m = i, mk = lk; if (l < n && k[l] < mk) { m = l; mk = k[l]; } if (r < n && k[r] < mk) { m = r; mk = k[r]; } if (m === i) break; k[i] = k[m]; v[i] = v[m]; i = m; } k[i] = lk; v[i] = lv; } this.lastKey = tk; return top; };
+  Heap.prototype.size = function () { return this.k.length; };
+
+  // edge-based Dijkstra with turn bans
+  function route(G, from, to) {
+    const s = snap(G, from), t = snap(G, to);
+    if (!s || !t) return { error: 'Could not find the approved network near ' + (!s ? 'the start' : 'the destination') + '.' };
+    const ends = new Set([s.ei, t.ei]);
+    const nD = G.E.length * 2, dist = new Float64Array(nD).fill(Infinity), prev = new Int32Array(nD).fill(-2);
+    const H = new Heap();
+    const se = G.E[s.ei];
+    const vS = speedOf(se.f >= 0 ? G.feats[se.f] : null) / 3.6;
+    // virtual arrivals: travelling from snap point toward b == directed 2*ei arriving at b ; toward a == 2*ei+1 arriving at a
+    const init = [[2 * s.ei, s.toB / vS], [2 * s.ei + 1, s.toA / vS]];
+    for (const [d, c] of init) { dist[d] = c; prev[d] = -1; H.push(c, d); }
+    const te = G.E[t.ei];
+    const vT = speedOf(te.f >= 0 ? G.feats[te.f] : null) / 3.6;
+    // same-edge direct case
+    let best = Infinity, bestEnd = -1, bestMode = null;
+    if (s.ei === t.ei) {
+      const sa = s.toA, ta = t.toA;
+      best = Math.abs(ta - sa) / vS; bestMode = 'same';
+    }
+    while (H.size()) {
+      const d = H.pop(), c = H.lastKey; if (c > dist[d]) continue; if (c >= best) break;
+      const j = head(G, d);
+      // reaching destination edge from node j: entering t.ei from its a (dir 2ei) costs toA; from b (dir 2ei+1) costs toB
+      for (const dout of G.out[j]) {
+        if ((dout >> 1) === t.ei) {
+          if (!banned(G, d, dout)) {
+            const extra = (dout & 1) ? t.toB : t.toA; const tot = c + extra / vT;
+            if (tot < best) { best = tot; bestEnd = d; bestMode = dout; }
+          }
+        }
+        if (banned(G, d, dout)) continue;
+        const ei = dout >> 1; const nc = c + edgeCost(G, ei, G.E[ei].len, ends);
+        if (nc < dist[dout]) { dist[dout] = nc; prev[dout] = d; H.push(nc, dout); }
+      }
+    }
+    if (best === Infinity) return { error: 'No legal route found on this network between those points.', s, t };
+    // reconstruct
+    const seq = [];
+    if (bestMode !== 'same') { let d = bestEnd; while (d >= 0) { seq.push(d); d = prev[d]; } seq.reverse(); }
+    return assemble(G, s, t, seq, bestMode, best);
+  }
+
+  function assemble(G, s, t, seq, finalDir, secs) {
+    // build polyline + steps. seq[0] is a virtual directed edge on s.ei (partial)
+    const legs = []; // {name, f, coords:[...], len}
+    const C = G.coords;
+    function partial(ei, fromPt, k, dirToB) { // from snapped point along edge toward b (dirToB) or a
+      const e = G.E[ei]; const pts = [fromPt];
+      if (dirToB) for (let i = k; i < e.path.length; i++) pts.push(C[e.path[i]]);
+      else for (let i = k - 1; i >= 0; i--) pts.push(C[e.path[i]]);
+      return pts;
+    }
+    if (finalDir === 'same') {
+      const e = G.E[s.ei]; const forward = t.toA >= s.toA; const pts = [s.pt];
+      if (forward) { for (let i = s.k; i < t.k; i++) pts.push(C[e.path[i]]); } else { for (let i = s.k - 1; i >= t.k; i--) pts.push(C[e.path[i]]); }
+      pts.push(t.pt); legs.push({ ei: s.ei, d: forward ? 2 * s.ei : 2 * s.ei + 1, pts });
+    } else {
+      seq.forEach((d, i) => {
+        const ei = d >> 1;
+        if (i === 0) legs.push({ ei, d, pts: partial(ei, s.pt, s.k, (d & 1) === 0) });
+        else legs.push({ ei, d, pts: dirPath(G, d).map(v => C[v]) });
+      });
+      const de = finalDir, ei = de >> 1; const e = G.E[ei];
+      // from node into t edge to snap point
+      const pts = [];
+      if ((de & 1) === 0) { for (let i = 0; i < t.k; i++) pts.push(C[e.path[i]]); } else { for (let i = e.path.length - 1; i >= t.k; i--) pts.push(C[e.path[i]]); }
+      pts.push(t.pt); legs.push({ ei, d: de, pts });
+    }
+    // lengths
+    for (const L of legs) { L.len = 0; for (let i = 1; i < L.pts.length; i++) L.len += hav(L.pts[i - 1], L.pts[i]); }
+    // steps: merge by name
+    const nm = L => { const f = G.E[L.ei].f; return f >= 0 ? G.feats[f].name : null; };
+    const steps = [];
+    let cur = null;
+    legs.forEach((L, i) => {
+      const name = nm(L) || (cur ? cur.name : 'connector');
+      if (cur && (name === cur.name || L.len < 1)) { cur.len += L.len; cur.pts.push(...L.pts.slice(1)); return; }
+      let instr = 'Start on', td = 0;
+      if (cur) {
+        const a = cur.pts, b = L.pts;
+        const pin = pick(a, true), pout = pick(b, false);
+        td = turnDelta(bearing(pin, a[a.length - 1]), bearing(b[0], pout));
+        instr = td < -135 || td > 135 ? 'Make a sharp ' + (td < 0 ? 'left' : 'right') + ' onto'
+          : td < -45 ? 'Turn left onto' : td > 45 ? 'Turn right onto'
+          : td < -15 ? 'Bear left onto' : td > 15 ? 'Bear right onto' : 'Continue onto';
+      }
+      cur = { name, len: L.len, pts: L.pts.slice(), instr, at: L.pts[0], td };
+      steps.push(cur);
+    });
+    // fold short roundabout / slip-road pieces into the following step
+    const MINOR = /\bRty\b|roundabout|\boff to\b|\bon to\b|\bslip\b|\bramp\b/i;
+    for (let i = 1; i < steps.length - 1; i++) {
+      const s = steps[i];
+      if (s.len < 250 && MINOR.test(s.name)) {
+        const nx = steps[i + 1], pv = steps[i - 1];
+        nx.pts = s.pts.concat(nx.pts.slice(1)); nx.len += s.len; nx.at = s.at; nx.viaRty = nx.viaRty || /\bRty\b|roundabout/i.test(s.name);
+        steps.splice(i, 1); i--;
+        const a = pv.pts, b = nx.pts, pin = pick(a, true);
+        // bearing out: ~250 m along next step so the roundabout loop doesn't dominate
+        let pout = b[b.length - 1]; for (let k = 1; k < b.length; k++) if (hav(b[0], b[k]) >= 250) { pout = b[k]; break; }
+        const td = turnDelta(bearing(pin, a[a.length - 1]), bearing(b[0], pout));
+        nx.instr = td < -45 ? 'Turn left onto' : td > 45 ? 'Turn right onto' : td < -15 ? 'Bear left onto' : td > 15 ? 'Bear right onto' : 'Continue onto';
+        if (nx.viaRty) nx.instr = 'At the roundabout, ' + (td < -45 ? 'turn left onto' : td > 45 ? 'turn right onto' : td < -135 || td > 135 ? 'go back onto' : 'continue onto');
+        if (pv.name === nx.name) { pv.len += nx.len; pv.pts.push(...nx.pts.slice(1)); steps.splice(i + 1, 1); }
+      }
+    }
+    steps.forEach(s => { s.name = s.name.replace(/\s*\bRty\b/, ' roundabout'); });
+    function pick(pts, fromEnd) { // point ~30m back/forward from the junction
+      if (fromEnd) { const end = pts[pts.length - 1]; for (let i = pts.length - 2; i >= 0; i--) if (hav(pts[i], end) >= 30) return pts[i]; return pts[0]; }
+      const st = pts[0]; for (let i = 1; i < pts.length; i++) if (hav(st, pts[i]) >= 30) return pts[i]; return pts[pts.length - 1];
+    }
+    const line = []; legs.forEach((L, i) => line.push(...(i ? L.pts.slice(1) : L.pts)));
+    // conditions along route
+    const condMap = new Map();
+    for (const L of legs) { const f = G.E[L.ei].f; if (f < 0) continue; const F = G.feats[f]; for (const c of F.conds) { const k = F.name + '|' + c; if (!condMap.has(k)) condMap.set(k, { road: F.name, text: c, at: L.pts[Math.floor(L.pts.length / 2)], notThrough: NOT_THROUGH.test(c) }); } }
+    // turn rules / bridges near route
+    const near = (pt, m) => { for (let i = 1; i < line.length; i++) if (projPointSeg(pt, line[i - 1], line[i]).d < m) return true; return false; };
+    const rulesNear = [];
+    const lb = bbox(line, 0.01);
+    for (const r of G.rules) if (inB(r.at, lb) && near(r.at, 40)) rulesNear.push(r);
+    const bridgesNear = G.brs.filter(b => inB(b.at, lb) && near(b.at, 40));
+    const total = legs.reduce((a, L) => a + L.len, 0);
+    return { line, steps, legs, total, secs, s, t, conditions: [...condMap.values()], rulesNear, bridgesNear };
+  }
+  const bbox = (pts, pad) => { let x0 = 180, y0 = 90, x1 = -180, y1 = -90; for (const p of pts) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } return [x0 - pad, y0 - pad, x1 + pad, y1 + pad]; };
+  const inB = (p, b) => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
+
+  return { build, route, snap, hav, parseRule, namesMatch, stripHtml };
+})();
+if (typeof module !== 'undefined') module.exports = RAV;
+
+</script>
+<script>
+// ===== Driving mode: GPS follow, spoken turns, reroute, voice input =====
+// Expects globals from the UI script: map, RAV, G (via getG), P, curNet, render helpers passed in init.
+const NAV = (() => {
+  const D2R = Math.PI / 180;
+  const hav = (a, b) => RAV.hav(a, b);
+  const kx = lat => 111320 * Math.cos(lat * D2R), KY = 110574;
+  function proj(p, a, b) { const cx = kx(p[1]); const ax = (a[0] - p[0]) * cx, ay = (a[1] - p[1]) * KY, bx = (b[0] - p[0]) * cx, by = (b[1] - p[1]) * KY; const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy; let t = L2 ? -(ax * dx + ay * dy) / L2 : 0; t = Math.max(0, Math.min(1, t)); return { d: Math.hypot(ax + t * dx, ay + t * dy), t }; }
+
+  // ---- speech ----
+  let muted = false, voice = null;
+  function pickVoice() { try { const vs = speechSynthesis.getVoices(); voice = vs.find(v => /en-AU/i.test(v.lang)) || vs.find(v => /en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; } catch { } }
+  try { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; } catch { }
+  function say(text, urgent) {
+    if (muted || !('speechSynthesis' in window)) return;
+    try { if (urgent) speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); if (voice) u.voice = voice; u.lang = voice ? voice.lang : 'en-AU'; u.rate = 1; speechSynthesis.speak(u); } catch { }
+  }
+  const ABBR = [[/\bHwy\b/g, 'Highway'], [/\bGNH\b/g, 'Great Northern Highway'], [/\bRd\b/g, 'Road'], [/\bSt\b/g, 'Street'], [/\bDr\b/g, 'Drive'], [/\bAve?\b/g, 'Avenue'], [/\bPde\b/g, 'Parade'], [/\bTce\b/g, 'Terrace'], [/\bCres\b/g, 'Crescent'], [/\bPl\b/g, 'Place'], [/\bCt\b/g, 'Court'], [/\bBvd\b/g, 'Boulevard'], [/\bWy\b/g, 'Way'], [/\bRty\b/g, 'roundabout'], [/\bNth\b/g, 'North'], [/\bSth\b/g, 'South'], [/\bMt\b/g, 'Mount'], [/\s*\((North|South|East|West)bound\)/gi, ''], [/ - /g, ' ']];
+  const speakName = n => { let s = n || 'the road'; for (const [re, r] of ABBR) s = s.replace(re, r); s = s.replace(/\boff to\b/i, 'exit to').replace(/\bon to\b/i, 'ramp to'); return s; };
+  const speakInstr = st => { const verb = st.instr.replace(/ onto$/, '').replace(/^Continue$/, 'Continue'); return `${verb} onto ${speakName(st.name)}`; };
+  const speakDist = m => m >= 950 ? `In ${m >= 9500 ? Math.round(m / 1000) : (Math.round(m / 500) / 2).toString()} kilometres` : `In ${m >= 300 ? Math.round(m / 100) * 100 : Math.max(50, Math.round(m / 50) * 50)} metres`;
+
+  // ---- state ----
+  let arrived = false, map = null, R = null, cum = null, man = null, warn = null, ui = null, watchId = null, lock = null, lastIdx = 0, offCount = 0, sim = null, active = false, lastFix = null, rerouting = false, opts = null, posMarker = null, endInfo = null;
+
+  function prepare(route) {
+    R = route; const L = route.line; cum = new Float64Array(L.length); for (let i = 1; i < L.length; i++) cum[i] = cum[i - 1] + hav(L[i - 1], L[i]);
+    // maneuver distances from step lengths
+    man = []; let acc = 0; route.steps.forEach((s, i) => { if (i > 0) man.push({ d: acc, step: s, said: {} }); acc += s.len; });
+    const scale = acc > 0 ? cum[cum.length - 1] / acc : 1; man.forEach(m => m.d *= scale);
+    // condition warnings at their along-route distance
+    warn = [];
+    const seen = new Set();
+    for (const c of route.conditions) { if (!c.at) continue; const a = alongOf(c.at); const key = c.road; if (seen.has(key + '|' + Math.round(a / 2000))) continue; seen.add(key + '|' + Math.round(a / 2000)); warn.push({ d: a, text: c.text, road: c.road, said: false, hard: c.notThrough }); }
+    for (const r of route.rulesNear || []) warn.push({ d: alongOf(r.at), text: r.text, road: r.where || 'intersection', said: false, rule: true });
+    warn.sort((a, b) => a.d - b.d);
+    lastIdx = 0; offCount = 0; arrived = false;
+  }
+  function alongOf(pt) { const L = R.line; let best = 1e18, bi = 0, bt = 0; for (let i = 1; i < L.length; i++) { const p = proj(pt, L[i - 1], L[i]); if (p.d < best) { best = p.d; bi = i; bt = p.t; } } return cum[bi - 1] + bt * (cum[bi] - cum[bi - 1]); }
+  function locate(pt) { // search near last index first
+    const L = R.line; let best = 1e18, bi = lastIdx || 1, bt = 0;
+    const lo = Math.max(1, lastIdx - 30), hi = Math.min(L.length - 1, lastIdx + 400);
+    for (let i = lo; i <= hi; i++) { const p = proj(pt, L[i - 1], L[i]); if (p.d < best) { best = p.d; bi = i; bt = p.t; } }
+    if (best > 150) for (let i = 1; i < L.length; i++) { const p = proj(pt, L[i - 1], L[i]); if (p.d < best) { best = p.d; bi = i; bt = p.t; } }
+    lastIdx = bi; return { off: best, along: cum[bi - 1] + bt * (cum[bi] - cum[bi - 1]) };
+  }
+
+  const fmtKm = m => m < 950 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(m < 20000 ? 1 : 0) + ' km';
+  const fmtT = s => { const m = Math.round(s / 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'); };
+
+  function onFix(lon, lat, acc, speed) {
+    if (!active || !R) return;
+    const pt = [lon, lat]; lastFix = { pt, acc, speed, t: Date.now() };
+    posMarker.setLatLng([lat, lon]);
+    if (opts.follow()) map.setView([lat, lon], Math.max(map.getZoom(), 14), { animate: false });
+    const { off, along } = locate(pt);
+    const total = cum[cum.length - 1], remain = Math.max(0, total - along);
+    // off route?
+    if (off > Math.max(80, (acc || 0) * 1.5)) { if (++offCount >= 3 && !rerouting) return reroute(pt); } else offCount = 0;
+    // next maneuver
+    const next = man.find(m => m.d > along - 5);
+    const v = speed && speed > 2 ? speed : 22; // m/s, ~80 km/h default
+    if (next) {
+      const dist = next.d - along;
+      const far = Math.max(1500, v * 75), mid = Math.max(400, v * 22), now = Math.max(80, v * 6);
+      if (dist <= far && dist > mid * 1.3 && !next.said.far && dist > 1200) { next.said.far = 1; say(`${speakDist(dist)}, ${speakInstr(next.step).toLowerCase()}`); }
+      else if (dist <= mid && dist > now * 1.5 && !next.said.mid) { next.said.mid = 1; next.said.far = 1; say(`${speakDist(dist)}, ${speakInstr(next.step).toLowerCase()}`); }
+      else if (dist <= now && !next.said.now) { next.said.now = next.said.mid = next.said.far = 1; say(speakInstr(next.step), true); }
+      showBanner(next.step, dist, remain);
+    } else showBanner(null, remain, remain);
+    // condition warnings ~1.5 km ahead
+    for (const w of warn) { if (w.said) continue; const ahead = w.d - along; if (ahead < -50) { w.said = true; continue; } if (ahead <= 1500) { w.said = true; const txt = w.text.length > 160 ? w.text.slice(0, 157).replace(/\s\S*$/, '') + '…' : w.text; say(w.rule ? `Turn restriction ahead at ${speakName(w.road)}. ${txt}` : `Heads up. ${speakName(w.road)} has a condition. ${txt}`); flash(`${w.road}: ${w.text}`); } }
+    // arrival
+    if (remain < 40) arrive();
+    ui.eta.textContent = `${fmtKm(remain)} · ${fmtT(remain / Math.max(v, 15))}`;
+  }
+  function showBanner(step, dist, remain) {
+    if (!step) { ui.arrow.textContent = '⚑'; ui.dist.textContent = fmtKm(dist); ui.instr.textContent = endInfo || 'Destination ahead'; return; }
+    ui.arrow.textContent = opts.arrow(step.instr); ui.dist.textContent = fmtKm(dist); ui.instr.textContent = `${step.instr} ${step.name}`;
+  }
+  let flashT = null;
+  function flash(t) { ui.flash.textContent = t; ui.flash.style.display = 'block'; clearTimeout(flashT); flashT = setTimeout(() => ui.flash.style.display = 'none', 12000); }
+  function arrive() {
+    if (!active || arrived) return; arrived = true;
+    say(endInfo ? `You've reached the end of the approved route. ${endInfo}` : 'You have arrived.', true);
+    ui.instr.textContent = endInfo ? 'End of approved route. ' + endInfo : 'Arrived'; ui.arrow.textContent = '⚑'; ui.dist.textContent = '';
+    stopTracking();
+  }
+  async function reroute(pt) {
+    rerouting = true; say('Off route. Finding a new legal route.', true); flash('Off route, rerouting on approved roads…');
+    await new Promise(r => setTimeout(r, 30));
+    const r = opts.reroute(pt);
+    rerouting = false; offCount = 0;
+    if (r && !r.error) { prepare(r); opts.drawRoute(r); say(`New route. ${fmtKm(r.total).replace('km', 'kilometres')} to go.`); }
+    else { say('Could not find a legal route from here. Head back to the approved route.'); flash('No legal route from here. Return to the approved route (blue line).'); }
+  }
+
+  async function keepAwake() { try { if ('wakeLock' in navigator) { lock = await navigator.wakeLock.request('screen'); } } catch { } }
+  document.addEventListener('visibilitychange', () => { if (active && document.visibilityState === 'visible' && !lock) keepAwake(); });
+  function stopTracking() { if (watchId !== null) { try { navigator.geolocation.clearWatch(watchId); } catch { } watchId = null; } if (sim) { clearInterval(sim.t); sim = null; } }
+
+  function start(route, o, demo) {
+    opts = o; ui = o.ui; map = o.map; endInfo = o.endInfo || null;
+    prepare(route); active = true; document.body.classList.add('driving');
+    if (!posMarker) posMarker = L.circleMarker([route.line[0][1], route.line[0][0]], { radius: 9, color: '#fff', weight: 3, fillColor: '#0b62d6', fillOpacity: 1 }).addTo(map); else posMarker.addTo(map);
+    keepAwake();
+    const first = route.steps[0];
+    say(`Starting route on Network ${o.net}. ${fmtKm(route.total).replace('km', 'kilometres')}. Head off on ${speakName(first.name)}.`, true);
+    showBanner(man[0] ? man[0].step : null, man[0] ? man[0].d : route.total, route.total);
+    if (demo) { // simulate driving along the route
+      let along = 0; const total = cum[cum.length - 1]; const stepM = Math.max(25, total / 600);
+      sim = { t: setInterval(() => { along += stepM * o.simSpeed(); if (along >= total) along = total; const L = R.line; let i = 1; while (i < cum.length - 1 && cum[i] < along) i++; const t = (along - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]); const a = L[i - 1], b = L[i]; onFix(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 5, 25); if (along >= total) clearInterval(sim && sim.t); }, 500) };
+      return true;
+    }
+    if (!navigator.geolocation) { flash('GPS not available in this browser.'); return false; }
+    watchId = navigator.geolocation.watchPosition(p => onFix(p.coords.longitude, p.coords.latitude, p.coords.accuracy, p.coords.speed),
+      e => flash('GPS problem: ' + e.message + (location.protocol === 'file:' ? ' (phones usually need the hosted link for GPS)' : '')), { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+    return true;
+  }
+  function stop() { active = false; stopTracking(); try { speechSynthesis.cancel(); } catch { } try { lock && lock.release(); } catch { } lock = null; document.body.classList.remove('driving'); if (posMarker) map.removeLayer(posMarker); }
+  function setMuted(m) { muted = m; if (m) try { speechSynthesis.cancel(); } catch { } }
+  // test hook
+  return { start, stop, setMuted, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
+})();
+
+// ---- voice input for address boxes ----
+const VOICE = (() => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function listen(onText, onState) {
+    if (!SR) return false;
+    const r = new SR(); r.lang = 'en-AU'; r.interimResults = false; r.maxAlternatives = 1;
+    r.onresult = e => onText(e.results[0][0].transcript);
+    r.onerror = e => onState('error', e.error);
+    r.onend = () => onState('end');
+    try { r.start(); onState('listening'); } catch (e) { onState('error', e.message); }
+    return true;
+  }
+  return { supported: !!SR, listen };
+})();
+
+</script>
+<script>
+(() => {
+const BASE = 'https://gisservices.mainroads.wa.gov.au/arcgis/rest/services/OpenData/HVS_Networks_DataPortal/MapServer/';
+const LAYERS = { 6: { lines: [56, 57], ints: 55, br: 54 }, 7: { lines: [61, 62], ints: 60, br: 59 }, 8: { lines: [66, 67], ints: 65, br: 64 }, 9: { lines: [71, 72], ints: 70, br: 69 }, 10: { lines: [76, 77], ints: 75, br: 74 } };
+const OFF_NET_M = 300, CACHE_DAYS = 7;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtKm = m => m < 950 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(m < 20000 ? 1 : 0) + ' km';
+const fmtTime = s => { const m = Math.round(s / 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0') + ' min'; };
+const status = t => { $('status').textContent = t; };
+const netFail = e => e && (e.name === 'TypeError' || /fetch|network|load failed/i.test(e.message || ''));
+const showBlocked = () => { $('blocked').style.display = 'block'; };
+
+// ---- map ----
+// Google Maps Demo Key (prototype use only; daily limit). Restrict it to your web address once hosted.
+const GMAPS_KEY = 'AIzaSyBVhkli3WgpzPo3JtEOVtvlOBGC-58daU4';
+const map = L.map('map', { preferCanvas: true }).setView([-28.5, 121], 5);
+const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' });
+const layerCtl = L.control.layers({ 'Esri streets': esri }, null, { position: 'topright' }).addTo(map);
+let G_OK = false, gLib = null;
+window.gm_authFailure = () => { G_OK = false; gNote('Google key rejected or daily limit reached; using free map and search.'); if (!map.hasLayer(esri)) { map.eachLayer(l => { if (l._GAPIPromise || (l.options && l.options.type)) map.removeLayer(l); }); esri.addTo(map); } };
+const gNote = t => { const el = document.getElementById('gnote'); if (el) el.textContent = t; };
+function loadGoogle() {
+  return new Promise((res, rej) => {
+    if (!GMAPS_KEY || !L.gridLayer || !L.gridLayer.googleMutant) return rej(new Error('no key/plugin'));
+    window.__gReady = res; const sc = document.createElement('script');
+    sc.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GMAPS_KEY) + '&v=weekly&loading=async&callback=__gReady';
+    sc.onerror = () => rej(new Error('Google script blocked')); document.head.appendChild(sc);
+    setTimeout(() => rej(new Error('Google timeout')), 15000);
+  });
+}
+loadGoogle().then(async () => {
+  const road = L.gridLayer.googleMutant({ type: 'roadmap', maxZoom: 20 }), sat = L.gridLayer.googleMutant({ type: 'hybrid', maxZoom: 20 });
+  layerCtl.addBaseLayer(road, 'Google map'); layerCtl.addBaseLayer(sat, 'Google satellite');
+  if (map.hasLayer(esri)) map.removeLayer(esri); road.addTo(map);
+  const places = await google.maps.importLibrary('places');
+  gLib = { Place: places.Place, Auto: places.AutocompleteSuggestion, Token: places.AutocompleteSessionToken };
+  G_OK = true; gNote('');
+}).catch(() => { esri.addTo(map); gNote('Google not available; using free map and search.'); });
+const netLayer = L.layerGroup().addTo(map), routeLayer = L.layerGroup().addTo(map), markLayer = L.layerGroup().addTo(map);
+const pin = (color) => L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
+const P = { from: null, to: null }; // {lon,lat,label}
+const marks = {};
+function setPoint(which, lon, lat, label) {
+  P[which] = { lon, lat, label }; $(which).value = label;
+  if (marks[which]) markLayer.removeLayer(marks[which]);
+  marks[which] = L.marker([lat, lon], { icon: pin(which === 'from' ? '#15803d' : '#b91c1c') }).addTo(markLayer).bindTooltip(which === 'from' ? 'Start' : 'Destination');
+  updateGo();
+}
+
+// ---- data loading with IndexedDB cache ----
+function idb() { return new Promise((res, rej) => { try { const r = indexedDB.open('rav-cache', 1); r.onupgradeneeded = () => r.result.createObjectStore('layers'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); }
+async function cacheGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction('layers').objectStore('layers').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch { return null; } }
+async function cachePut(k, v) { try { const db = await idb(); db.transaction('layers', 'readwrite').objectStore('layers').put(v, k); } catch { } }
+async function fetchLayer(id, fields, onPage) {
+  let out = [], off = 0;
+  for (let page = 0; page < 50; page++) {
+    const url = `${BASE}${id}/query?where=1%3D1&outFields=${fields}&outSR=4326&geometryPrecision=6&f=geojson&resultOffset=${off}&resultRecordCount=2000`;
+    const r = await fetch(url); if (!r.ok) throw new Error('Main Roads server returned ' + r.status);
+    const j = await r.json(); if (j.error) throw new Error(j.error.message || 'Main Roads query error');
+    out = out.concat(j.features || []); onPage && onPage(out.length);
+    const more = j.exceededTransferLimit || (j.properties && j.properties.exceededTransferLimit);
+    if (!more || !(j.features || []).length) break; off += 2000;
+  }
+  return out;
+}
+async function loadNetwork(n, force) {
+  const key = 'v2-net' + n, cached = !force && await cacheGet(key);
+  if (cached && Date.now() - cached.t < CACHE_DAYS * 864e5) return cached;
+  const L_ = LAYERS[n]; const lines = [];
+  for (const [i, id] of L_.lines.entries()) {
+    const f = await fetchLayer(id, 'ROAD,ROAD_NAME,NETWORK_TYPE,CONDITION,COMMENTS,CURFEW,MAX_SPEED', c => status(`Downloading Network ${n} from Main Roads… ${lines.length + c} road sections`));
+    f.forEach(x => x.properties._cond = i === 0); lines.push(...f);
+  }
+  status('Downloading turn restrictions and bridges…');
+  const ints = await fetchLayer(L_.ints, 'NODE_DESCR,CONDITION').catch(() => []);
+  const br = await fetchLayer(L_.br, '*').catch(() => []);
+  const rec = { t: Date.now(), lines, ints, br };
+  cachePut(key, rec); return rec;
+}
+
+let G = null, DATA = null, curNet = null, RTAA = [];
+const asmLayer = L.layerGroup().addTo(map);
+const tcase = t => (t || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+async function loadAssembly() {
+  let c = await cacheGet('rtaa');
+  if (!c || Date.now() - c.t > CACHE_DAYS * 864e5) { try { c = { t: Date.now(), f: await fetchLayer(0, 'ROAD_NAME,IIT_DESC,LG_NAME') }; cachePut('rtaa', c); } catch { c = c || { f: [] }; } }
+  RTAA = c.f.filter(f => f.geometry).map(f => ({ at: f.geometry.coordinates, name: tcase(f.properties.IIT_DESC || 'Road train assembly area').replace(/Road Train Assembly Area/i, 'RTAA'), road: f.properties.ROAD_NAME, lg: f.properties.LG_NAME }));
+  asmLayer.clearLayers();
+  const ic = L.divIcon({ className: '', html: '<div title="Road train assembly area" style="background:#1d2329;color:#fff;font:700 10px system-ui;padding:2px 4px;border-radius:4px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)">RTAA</div>', iconSize: [36, 18], iconAnchor: [18, 9] });
+  RTAA.forEach(a => L.marker([a.at[1], a.at[0]], { icon: ic }).addTo(asmLayer).bindPopup(`<b>${esc(a.name)}</b><br>${esc(a.road || '')}${a.lg ? ', ' + esc(a.lg) : ''}`));
+}
+loadAssembly();
+async function prepare(force) {
+  const n = +$('net').value; curNet = n; G = null; updateGo();
+  $('go').textContent = 'Loading network…'; routeLayer.clearLayers(); $('result').innerHTML = '';
+  try {
+    DATA = await loadNetwork(n, force);
+    if (curNet !== n) return;
+    status('Building road graph…'); await new Promise(r => setTimeout(r, 20));
+    const t0 = performance.now();
+    G = RAV.build(DATA.lines, DATA.ints, DATA.br);
+    drawNetwork();
+    const age = Math.round((Date.now() - DATA.t) / 36e5);
+    $('dataInfo').textContent = `Network ${n}: ${DATA.lines.length} road sections, ${DATA.ints.length} intersection rules. Data ${age < 1 ? 'downloaded just now' : 'cached ' + (age < 48 ? age + ' h' : Math.round(age / 24) + ' days') + ' ago'}.`;
+    status(`Network ${n} ready (${((performance.now() - t0) / 1000).toFixed(1)} s).`);
+  } catch (e) {
+    if (netFail(e)) { showBlocked(); status('Could not reach Main Roads WA.'); }
+    else status('Could not load Main Roads data: ' + e.message + '. Check your connection and try Refresh.');
+  }
+  $('go').textContent = 'Find route'; updateGo();
+}
+function drawNetwork() {
+  netLayer.clearLayers(); if (!$('showNet').checked || !DATA) return;
+  const r = L.canvas({ padding: 0.3 });
+  L.geoJSON({ type: 'FeatureCollection', features: DATA.lines }, { renderer: r, interactive: false, style: f => ({ color: f.properties._cond ? '#e08a1e' : '#2e9d5b', weight: 2, opacity: 0.75 }) }).addTo(netLayer);
+}
+function updateGo() { $('go').disabled = !(G && (P.from || $('from').value.trim()) && (P.to || $('to').value.trim())); }
+
+// ---- geocoding ----
+const WA = { west: 112, south: -35.3, east: 129.2, north: -13.5 };
+const inWA = (lat, lon) => lat >= WA.south && lat <= WA.north && lon >= WA.west && lon <= WA.east;
+const shortAddr = a => (a || '').replace(/, Australia$/, '');
+async function geocodeGoogle(q) {
+  const out = [];
+  if (/^\s*(lot\s+|unit\s+)?\d/i.test(q)) { // street address: autocomplete predictions are exact (the demo key can't use the geocoder)
+    try {
+      const tok = new gLib.Token();
+      const { suggestions } = await gLib.Auto.fetchAutocompleteSuggestions({ input: q, includedRegionCodes: ['au'], locationRestriction: WA, sessionToken: tok });
+      const top = suggestions.filter(x => x.placePrediction).slice(0, 3);
+      const got = await Promise.all(top.map(async x => { const pl = x.placePrediction.toPlace(); await pl.fetchFields({ fields: ['location', 'formattedAddress'] }); return { lat: pl.location.lat(), lon: pl.location.lng(), label: shortAddr(x.placePrediction.text.text) }; }).map(p => p.catch(() => null)));
+      got.forEach(x => { if (x && inWA(x.lat, x.lon)) out.push(x); });
+    } catch { }
+    if (out.length) return out;
+  }
+  try { const { places } = await gLib.Place.searchByText({ textQuery: q, fields: ['displayName', 'formattedAddress', 'location'], locationRestriction: WA, maxResultCount: 5 });
+    places.forEach(p => { const lat = p.location.lat(), lon = p.location.lng(); const addr = shortAddr(p.formattedAddress); const nm = p.displayName && !addr.startsWith(p.displayName) ? p.displayName + ', ' : ''; out.push({ lat, lon, label: nm + addr }); });
+  } catch (e) { if (!out.length) throw e; }
+  const seen = new Set(); return out.filter(x => { const k = x.lat.toFixed(4) + x.lon.toFixed(4); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
+}
+async function geocode(q) {
+  const m = q.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if (m) { let a = +m[1], b = +m[2]; if (a > 0 && b < 0) [a, b] = [b, a]; return [{ lat: a, lon: b, label: `${a.toFixed(5)}, ${b.toFixed(5)}` }]; }
+  if (G_OK) { try { const r = await geocodeGoogle(q); if (r.length) return r; } catch (e) { gNote('Google search unavailable right now; using free search.'); } }
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=au&limit=5&viewbox=112,-13.5,129.2,-35.3&bounded=1&q=' + encodeURIComponent(q);
+  const r = await fetch(url, { headers: { 'Accept-Language': 'en' } }); const j = await r.json();
+  return j.map(x => ({ lat: +x.lat, lon: +x.lon, label: x.display_name.replace(/, Western Australia.*$/, ', WA') }));
+}
+async function resolveInput(which) { // returns true when the point is set
+  const q = $(which).value.trim(); const box = $(which + 'Choices');
+  if (!q) return false; if (P[which] && P[which].label === q) return true;
+  box.innerHTML = ''; box.className = '';
+  status('Searching…');
+  try {
+    const res = await geocode(q);
+    if (!res.length) { status('No match in WA for "' + q + '".'); return false; }
+    if (res.length === 1) { setPoint(which, res[0].lon, res[0].lat, res[0].label); map.setView([res[0].lat, res[0].lon], 10); status(''); return true; }
+    box.className = 'choices';
+    res.forEach(x => { const d = document.createElement('div'); d.textContent = x.label; d.onclick = () => { setPoint(which, x.lon, x.lat, x.label); box.innerHTML = ''; box.className = ''; map.setView([x.lat, x.lon], 10); }; box.appendChild(d); });
+    status('Pick the right place, then press Find route.');
+  } catch (e) { if (netFail(e)) { showBlocked(); status('Address search could not connect.'); } else status('Address search failed: ' + e.message); }
+  return false;
+}
+for (const w of ['from', 'to']) {
+  $(w).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); resolveInput(w); } });
+  $(w).addEventListener('input', () => { if (P[w] && $(w).value !== P[w].label) { P[w] = null; } updateGo(); suggest(w); });
+}
+// type-ahead suggestions (Google only)
+const sTimer = {}, sToken = {}, sSeq = {};
+function suggest(w) {
+  clearTimeout(sTimer[w]); const q = $(w).value.trim(); const box = $(w + 'Choices');
+  if (!G_OK || q.length < 3 || /^-?\d+(\.\d+)?\s*,/.test(q)) return;
+  sTimer[w] = setTimeout(async () => {
+    const seq = sSeq[w] = (sSeq[w] || 0) + 1;
+    try {
+      if (!sToken[w]) sToken[w] = new gLib.Token();
+      const { suggestions } = await gLib.Auto.fetchAutocompleteSuggestions({ input: q, includedRegionCodes: ['au'], locationRestriction: WA, sessionToken: sToken[w] });
+      if (seq !== sSeq[w] || $(w).value.trim() !== q) return;
+      box.innerHTML = ''; box.className = suggestions.length ? 'choices' : '';
+      suggestions.slice(0, 5).forEach(sg => { const pp = sg.placePrediction; if (!pp) return; const d = document.createElement('div'); d.textContent = shortAddr(pp.text.text);
+        d.onmousedown = e => e.preventDefault();
+        d.onclick = async () => { try { const pl = pp.toPlace(); await pl.fetchFields({ fields: ['location', 'formattedAddress', 'displayName'] }); sToken[w] = null; box.innerHTML = ''; box.className = ''; const lat = pl.location.lat(), lon = pl.location.lng(); setPoint(w, lon, lat, shortAddr(pp.text.text)); map.setView([lat, lon], 12); } catch (e) { status('Could not look up that place: ' + e.message); } };
+        box.appendChild(d); });
+    } catch { /* fall back to Enter / Find route search */ }
+  }, 350);
+}
+$('gps').onclick = () => {
+  if (!navigator.geolocation) { status('Location not available in this browser.'); return; }
+  status('Getting your location…');
+  navigator.geolocation.getCurrentPosition(p => { setPoint('from', p.coords.longitude, p.coords.latitude, 'My location'); map.setView([p.coords.latitude, p.coords.longitude], 11); status(''); },
+    e => status('Could not get location: ' + e.message), { enableHighAccuracy: true, timeout: 15000 });
+};
+let pickMode = '';
+document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { pickMode = b.dataset.pick; document.querySelectorAll('[data-pick]').forEach(x => x.classList.toggle('on', x === b)); });
+map.on('click', e => { if (!pickMode) return; setPoint(pickMode, e.latlng.lng, e.latlng.lat, `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`); if (pickMode === 'from') { document.querySelector('[data-pick="to"]').click(); } else { document.querySelector('[data-pick=""]').click(); } });
+
+// ---- routing + rendering ----
+const ARROW = i => /sharp left/.test(i) ? '↰' : /sharp right/.test(i) ? '↱' : /left/.test(i) ? (/Bear/.test(i) ? '↖' : '←') : /right/.test(i) ? (/Bear/.test(i) ? '↗' : '→') : /Start/.test(i) ? '●' : '↑';
+$('go').onclick = async () => {
+  if (!G) return;
+  const okFrom = await resolveInput('from'); if (!okFrom) return;
+  const okTo = await resolveInput('to'); if (!okTo) return;
+  status('Finding a legal route…');
+  setTimeout(() => {
+    const t0 = performance.now();
+    const r = RAV.route(G, [P.from.lon, P.from.lat], [P.to.lon, P.to.lat]);
+    render(r, performance.now() - t0);
+  }, 10);
+};
+function render(r, ms) {
+  routeLayer.clearLayers(); const box = $('result'); box.innerHTML = '';
+  if (r.error) { box.innerHTML = `<div class="card bad">${esc(r.error)}<div class="hint">The two points may be on parts of the network that don't connect for this vehicle. Try a nearby town, or a higher category only if you're approved for it.</div></div>`; status(''); return; }
+  const ll = r.line.map(c => [c[1], c[0]]);
+  L.polyline(ll, { color: '#fff', weight: 9, opacity: 0.9 }).addTo(routeLayer);
+  const pl = L.polyline(ll, { color: '#0b62d6', weight: 5 }).addTo(routeLayer);
+  const gaps = [];
+  for (const [w, sn] of [['from', r.s], ['to', r.t]]) {
+    if (sn.d > OFF_NET_M) {
+      L.polyline([[P[w].lat, P[w].lon], [sn.pt[1], sn.pt[0]]], { color: '#b91c1c', weight: 4, dashArray: '6 8' }).addTo(routeLayer);
+      gaps.push(w === 'from' ? `Your start is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The route begins where you join it.` : `Your destination is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The approved route ends at the red dashed line; the last leg needs road-owner approval or a different vehicle.`);
+    }
+  }
+  map.fitBounds(pl.getBounds().extend([P.from.lat, P.from.lon]).extend([P.to.lat, P.to.lon]), { padding: [30, 30] });
+  const hard = r.conditions.filter(c => c.notThrough);
+  let h = `<div class="card"><div class="big">${fmtKm(r.total)} · ${fmtTime(r.secs)}</div><div class="hint">On Tandem Drive Network ${curNet} roads only. Time assumes 90 km/h on state roads, 70 km/h on local roads (or posted RAV limits), with no stops.</div></div>`;
+  h += `<div class="drive"><button class="go" id="startDrive">▶ Start driving</button><button id="demoDrive" title="Plays the route as if driving, so you can hear the directions">Demo drive</button></div>`;
+  if (gaps.length) h += `<div class="card warn">${gaps.join('<br><br>')}</div>`;
+  const nearAsm = p => RTAA.map(a => ({ ...a, d: RAV.hav([p.lon, p.lat], a.at) })).sort((x, y) => x.d - y.d)[0];
+  const asmNotes = [];
+  for (const [w, lbl] of [['from', 'start'], ['to', 'destination']]) { const a = nearAsm(P[w]); if (a && a.d < 60000) asmNotes.push(`Nearest road train assembly area to your ${lbl}: <b>${esc(a.name)}</b> (${esc(a.road || '')}, ${fmtKm(a.d)} away).`); }
+  if (asmNotes.length) h += `<div class="card">${asmNotes.join('<br>')}<div class="hint">If you're coming in or out of Perth metro, the road train usually makes up or breaks down at one of these, so plan the road train leg from there.</div></div>`;
+  if (r.rulesNear.length) h += `<div class="card warn">${r.rulesNear.length} intersection restriction${r.rulesNear.length > 1 ? 's' : ''} on or near this route. The route avoids the ones it could read, but check the list below.</div>`;
+  h += `<div class="sect">Directions <button class="small" id="copy">Copy</button></div><ol class="steps">`;
+  r.steps.forEach((s, i) => { h += `<li data-i="${i}"><span class="arrow">${ARROW(s.instr)}</span><span>${esc(s.instr)} <b>${esc(s.name)}</b></span><span class="dist">${fmtKm(s.len)}</span></li>`; });
+  h += `<li><span class="arrow">⚑</span><span>Arrive at destination</span><span></span></li></ol>`;
+  if (r.conditions.length) {
+    h += `<div class="sect">Conditions on this route (${r.conditions.length})</div>`;
+    r.conditions.sort((a, b) => b.notThrough - a.notThrough).forEach((c, i) => { h += `<div class="cond ${c.notThrough ? 'hard' : ''}" data-c="${i}"><b>${esc(c.road)}</b>${esc(c.text)}</div>`; });
+  }
+  if (r.rulesNear.length) {
+    h += `<div class="sect">Intersection restrictions near route</div>`;
+    r.rulesNear.forEach((x, i) => { h += `<div class="cond" data-r="${i}"><b>${esc(x.where || 'Intersection')}</b>${esc(x.text)}${x.parsed ? '' : ' <i>(not read automatically, check manually)</i>'}</div>`; });
+  }
+  if (r.bridgesNear.length) {
+    h += `<div class="sect">Bridges listed for this network near route</div>`;
+    r.bridgesNear.forEach(b => { h += `<div class="cond hard"><b>Bridge</b>${esc(Object.entries(b.props).filter(([k, v]) => v && !/OBJECTID|GlobalID/i.test(k)).map(([k, v]) => k + ': ' + RAV.stripHtml(String(v)).join(' ')).join(' · '))}</div>`; });
+  }
+  box.innerHTML = h;
+  box.querySelectorAll('li[data-i]').forEach(li => li.onclick = () => { const s = r.steps[+li.dataset.i]; map.setView([s.at[1], s.at[0]], 14); });
+  const conds = r.conditions;
+  box.querySelectorAll('[data-c]').forEach(el => el.onclick = () => { const c = conds[+el.dataset.c]; map.setView([c.at[1], c.at[0]], 13); });
+  box.querySelectorAll('[data-r]').forEach(el => el.onclick = () => { const x = r.rulesNear[+el.dataset.r]; map.setView([x.at[1], x.at[0]], 16); });
+  $('copy').onclick = async () => {
+    const txt = [`${P.from.label} → ${P.to.label} (Network ${curNet})`, `${fmtKm(r.total)}, ${fmtTime(r.secs)}`, ...r.steps.map((s, i) => `${i + 1}. ${s.instr} ${s.name} (${fmtKm(s.len)})`), 'Arrive', ...(conds.length ? ['', 'Conditions:', ...conds.map(c => `- ${c.road}: ${c.text}`)] : []), '', 'Planning aid only, check the Main Roads RAV Map.'].join('\n');
+    try { await navigator.clipboard.writeText(txt); status('Directions copied.'); } catch { status('Copy not allowed here.'); }
+  };
+  LAST = r; window.__dbgLast = () => LAST;
+  $('startDrive').onclick = () => drive(false);
+  $('demoDrive').onclick = () => drive(true);
+  status(`Route found in ${(ms / 1000).toFixed(1)} s.`);
+}
+// ---- driving mode wiring ----
+let LAST = null, follow = true;
+map.on('dragstart', () => { if (NAV.isActive()) follow = false; });
+function drawRouteOnly(r) {
+  routeLayer.clearLayers(); const ll = r.line.map(c => [c[1], c[0]]);
+  L.polyline(ll, { color: '#fff', weight: 9, opacity: 0.9 }).addTo(routeLayer); L.polyline(ll, { color: '#0b62d6', weight: 5 }).addTo(routeLayer);
+}
+function drive(demo) {
+  if (!LAST) return; follow = true;
+  const endInfo = LAST.t.d > OFF_NET_M ? `Your destination is ${fmtKm(LAST.t.d)} further, off the approved network.` : null;
+  const ok = NAV.start(LAST, {
+    ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash') },
+    map, arrow: ARROW, net: curNet, endInfo, follow: () => follow, simSpeed: () => 1,
+    reroute: pt => { const r = RAV.route(G, pt, [P.to.lon, P.to.lat]); if (r && !r.error) LAST = r; return r; },
+    drawRoute: drawRouteOnly
+  }, demo);
+  setTimeout(() => map.invalidateSize(), 50);
+  if (ok && !demo) status('Driving mode on. Keep this screen open.');
+}
+$('nStop').onclick = () => { NAV.stop(); setTimeout(() => { map.invalidateSize(); if (LAST) render(LAST, 0); }, 50); };
+$('nCentre').onclick = () => { follow = true; };
+let isMuted = false; $('nMute').onclick = () => { isMuted = !isMuted; NAV.setMuted(isMuted); $('nMute').textContent = isMuted ? '🔇' : '🔊'; };
+// voice input
+document.querySelectorAll('[data-mic]').forEach(b => {
+  if (!VOICE.supported) { b.style.display = 'none'; return; }
+  b.onclick = () => { const w = b.dataset.mic;
+    VOICE.listen(txt => { $(w).value = txt; P[w] = null; updateGo(); resolveInput(w); },
+      (st, err) => { b.classList.toggle('on', st === 'listening'); if (st === 'listening') status('Listening… say a town, address or place.'); if (st === 'error') status(err === 'not-allowed' ? 'Microphone blocked. Allow it in the browser (the hosted link works best on phones).' : 'Didn\'t catch that (' + err + '). Try again.'); });
+  };
+});
+
+$('net').onchange = () => prepare(false);
+$('refresh').onclick = () => prepare(true);
+$('showNet').onchange = drawNetwork;
+prepare(false);
+})();
+</script>
+</body>
+</html>

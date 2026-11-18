@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WA Road Train Route Planner (prototype)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.16.0/dist/Leaflet.GoogleMutant.js"></script>
+<style>
+  :root { --ink:#1d2329; --muted:#5f6b76; --line:#d9dee3; --bg:#f4f6f8; --accent:#0b62d6; --warn:#b45309; --bad:#b91c1c; --ok:#15803d; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  .app { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
+  aside { overflow-y: auto; background: #fff; border-right: 1px solid var(--line); padding: 14px 16px 24px; }
+  #map { height: 100%; }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 12px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .03em; }
+  select, input[type=text] { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
+  .row { display: flex; gap: 6px; }
+  .row input { flex: 1; }
+  button { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; width: 100%; padding: 11px; margin-top: 12px; }
+  button:disabled { opacity: .55; cursor: default; }
+  button.small { font-size: 12.5px; padding: 5px 8px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+  .choices { border: 1px solid var(--line); border-radius: 8px; margin-top: 4px; overflow: hidden; }
+  .choices div { padding: 7px 10px; font-size: 13px; cursor: pointer; border-top: 1px solid var(--line); }
+  .choices div:first-child { border-top: 0; }
+  .choices div:hover { background: #eef4fd; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 14px; }
+  .big { font-size: 22px; font-weight: 700; }
+  .warn { background: #fff7ed; border-color: #fcd9b6; color: #7c2d12; }
+  .bad { background: #fef2f2; border-color: #fecaca; color: #7f1d1d; }
+  .sect { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 16px 0 6px; display: flex; justify-content: space-between; align-items: center; }
+  ol.steps { list-style: none; padding: 0; margin: 0; }
+  ol.steps li { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; padding: 8px 4px; border-top: 1px solid var(--line); cursor: pointer; }
+  ol.steps li:hover { background: #f7f9fb; }
+  .arrow { font-size: 18px; text-align: center; }
+  .dist { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .cond { font-size: 13px; padding: 8px 10px; border-left: 3px solid var(--warn); background: #fffaf3; margin: 6px 0; border-radius: 0 6px 6px 0; cursor: pointer; }
+  .cond.hard { border-left-color: var(--bad); background: #fff5f5; }
+  .cond b { display: block; font-size: 12.5px; }
+  .toggles { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; margin-top: 10px; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; font-size: 12.5px; padding: 5px 9px; }
+  .seg button.on { background: var(--ink); color: #fff; }
+  .legend { font-size: 12px; color: var(--muted); display: flex; gap: 12px; margin-top: 6px; }
+  .sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  .foot { font-size: 11.5px; color: var(--muted); margin-top: 22px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .foot a { color: var(--muted); }
+  .mic { min-width: 42px; }
+  .mic.on { background: #fde2e2; border-color: #f5a3a3; }
+  .drive { display: flex; gap: 8px; margin-top: 10px; }
+  .drive button.go { flex: 1; background: #15803d; border-color: #15803d; color: #fff; font-weight: 700; padding: 12px; font-size: 16px; }
+  #navbar, #navbot, #flash { display: none; }
+  body.driving #navbar { display: grid; grid-template-columns: 64px 1fr; gap: 4px 12px; align-items: center; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: #0f3d2e; color: #fff; padding: 12px 16px calc(12px + env(safe-area-inset-top, 0)); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+  #navbar .na { grid-row: span 2; font-size: 46px; text-align: center; line-height: 1; }
+  #navbar .nd { font-size: 30px; font-weight: 800; line-height: 1.05; }
+  #navbar .ni { font-size: 17px; opacity: .95; }
+  body.driving #flash { position: fixed; top: 112px; left: 10px; right: 10px; z-index: 1000; background: #fff7ed; color: #7c2d12; border: 1px solid #fcd9b6; border-radius: 10px; padding: 10px 12px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  body.driving #navbot { display: flex; gap: 8px; align-items: center; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; background: #fff; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0)); box-shadow: 0 -2px 10px rgba(0,0,0,.2); }
+  #navbot .eta { flex: 1; font-weight: 700; font-size: 17px; }
+  #navbot button { padding: 10px 12px; font-size: 15px; }
+  #navbot .stop { background: #b91c1c; border-color: #b91c1c; color: #fff; font-weight: 700; }
+  body.driving .app { grid-template-columns: 1fr; }
+  body.driving aside { display: none; }
+  body.driving #map { height: 100vh; position: static; }
+  @media (max-width: 800px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 55vh; height: auto; }
+    aside { border-right: 0; order: 1; }
+    #map { order: 0; height: 55vh; position: sticky; top: 0; z-index: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>WA Road Train Route Planner</h1>
+    <div class="sub">Prototype v0.4 (voice + driving mode) · routes only on Main Roads WA approved RAV networks</div>
+
+    <label for="net">Vehicle / approved network</label>
+    <select id="net">
+      <option value="6">Network 6 · 36.5 m road train (Category 6)</option>
+      <option value="7" selected>Network 7 · 36.5 m double road train (Category 7)</option>
+      <option value="8">Network 8 · 36.5 m truck and two dogs (Category 8)</option>
+      <option value="9">Network 9 · 45–53.5 m triples (Category 9)</option>
+      <option value="10">Network 10 · 53.5 m triple road train (Category 10)</option>
+    </select>
+    <div class="hint">Pick the Tandem Drive network your RAV category is approved for.</div>
+
+    <label for="from">Start</label>
+    <div class="row"><input id="from" type="text" placeholder="Town, address or lat,lon"><button class="mic" data-mic="from" title="Say the start">🎤</button><button id="gps" title="Use my location">📍</button></div>
+    <div id="fromChoices"></div>
+
+    <label for="to">Destination</label>
+    <div class="row"><input id="to" type="text" placeholder="Town, address or lat,lon"><button class="mic" data-mic="to" title="Say the destination">🎤</button></div>
+    <div id="toChoices"></div>
+
+    <div class="toggles">
+      <span>Tap map to set:</span>
+      <span class="seg"><button data-pick="from">Start</button><button data-pick="to">Destination</button><button data-pick="" class="on">Off</button></span>
+    </div>
+
+    <button id="go" class="primary" disabled>Loading network…</button>
+    <div class="status" id="status"></div>
+    <div class="hint" id="gnote"></div>
+    <div id="blocked" class="card bad" style="display:none"><b>This page can't reach the internet from here.</b><br>If you opened it inside the Claude app or another preview, download the file and open it in Chrome (or Edge) instead. It needs to reach Main Roads WA and the address search.</div>
+
+    <div id="result"></div>
+
+    <div class="toggles">
+      <label style="all:unset;cursor:pointer"><input type="checkbox" id="showNet" checked> Show approved network</label>
+      <button class="small" id="refresh">Refresh Main Roads data</button>
+    </div>
+    <div class="legend" style="flex-wrap:wrap"><span><i class="sw" style="background:#2e9d5b"></i>Approved</span><span><i class="sw" style="background:#e08a1e"></i>Approved with conditions</span><span><i class="sw" style="background:#0b62d6"></i>Route</span><span><b style="background:#1d2329;color:#fff;font-size:9px;padding:1px 3px;border-radius:3px">RTAA</b> Assembly area</span></div>
+
+    <div class="foot">
+      <b>Planning aid only.</b> Always check the official <a href="https://mrwebapps.mainroads.wa.gov.au/hvsnetworkmap" target="_blank" rel="noopener">Main Roads RAV Map</a>, your notice or permit, and current road conditions. Turn restrictions are read from text and may be missed. Roads off the approved network need road-owner approval.<br><br>
+      Network data: Main Roads Western Australia (CC BY 4.0), loaded live. Routing: this app, using Main Roads data (not Google). Map and address search: Google Maps, with Esri and OpenStreetMap Nominatim as backup.
+      <div id="dataInfo"></div>
+    </div>
+  </aside>
+  <div id="map"></div>
+</div>
+<div id="navbar"><div class="na" id="nArrow">↑</div><div class="nd" id="nDist"></div><div class="ni" id="nInstr"></div></div>
+<div id="flash"></div>
+<div id="navbot"><span class="eta" id="nEta"></span><button id="nMute">🔊</button><button id="nCentre">⌖</button><button class="stop" id="nStop">Stop</button></div>
+
+<script>
+/*CORE*/
+</script>
+<script>
+/*NAV*/
+</script>
+<script>
+(() => {
+const BASE = 'https://gisservices.mainroads.wa.gov.au/arcgis/rest/services/OpenData/HVS_Networks_DataPortal/MapServer/';
+const LAYERS = { 6: { lines: [56, 57], ints: 55, br: 54 }, 7: { lines: [61, 62], ints: 60, br: 59 }, 8: { lines: [66, 67], ints: 65, br: 64 }, 9: { lines: [71, 72], ints: 70, br: 69 }, 10: { lines: [76, 77], ints: 75, br: 74 } };
+const OFF_NET_M = 300, CACHE_DAYS = 7;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtKm = m => m < 950 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(m < 20000 ? 1 : 0) + ' km';
+const fmtTime = s => { const m = Math.round(s / 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0') + ' min'; };
+const status = t => { $('status').textContent = t; };
+const netFail = e => e && (e.name === 'TypeError' || /fetch|network|load failed/i.test(e.message || ''));
+const showBlocked = () => { $('blocked').style.display = 'block'; };
+
+// ---- map ----
+// Google Maps Demo Key (prototype use only; daily limit). Restrict it to your web address once hosted.
+const GMAPS_KEY = 'AIzaSyBVhkli3WgpzPo3JtEOVtvlOBGC-58daU4';
+const map = L.map('map', { preferCanvas: true }).setView([-28.5, 121], 5);
+const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' });
+const layerCtl = L.control.layers({ 'Esri streets': esri }, null, { position: 'topright' }).addTo(map);
+let G_OK = false, gLib = null;
+window.gm_authFailure = () => { G_OK = false; gNote('Google key rejected or daily limit reached; using free map and search.'); if (!map.hasLayer(esri)) { map.eachLayer(l => { if (l._GAPIPromise || (l.options && l.options.type)) map.removeLayer(l); }); esri.addTo(map); } };
+const gNote = t => { const el = document.getElementById('gnote'); if (el) el.textContent = t; };
+function loadGoogle() {
+  return new Promise((res, rej) => {
+    if (!GMAPS_KEY || !L.gridLayer || !L.gridLayer.googleMutant) return rej(new Error('no key/plugin'));
+    window.__gReady = res; const sc = document.createElement('script');
+    sc.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GMAPS_KEY) + '&v=weekly&loading=async&callback=__gReady';
+    sc.onerror = () => rej(new Error('Google script blocked')); document.head.appendChild(sc);
+    setTimeout(() => rej(new Error('Google timeout')), 15000);
+  });
+}
+loadGoogle().then(async () => {
+  const road = L.gridLayer.googleMutant({ type: 'roadmap', maxZoom: 20 }), sat = L.gridLayer.googleMutant({ type: 'hybrid', maxZoom: 20 });
+  layerCtl.addBaseLayer(road, 'Google map'); layerCtl.addBaseLayer(sat, 'Google satellite');
+  if (map.hasLayer(esri)) map.removeLayer(esri); road.addTo(map);
+  const places = await google.maps.importLibrary('places');
+  gLib = { Place: places.Place, Auto: places.AutocompleteSuggestion, Token: places.AutocompleteSessionToken };
+  G_OK = true; gNote('');
+}).catch(() => { esri.addTo(map); gNote('Google not available; using free map and search.'); });
+const netLayer = L.layerGroup().addTo(map), routeLayer = L.layerGroup().addTo(map), markLayer = L.layerGroup().addTo(map);
+const pin = (color) => L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
+const P = { from: null, to: null }; // {lon,lat,label}
+const marks = {};
+function setPoint(which, lon, lat, label) {
+  P[which] = { lon, lat, label }; $(which).value = label;
+  if (marks[which]) markLayer.removeLayer(marks[which]);
+  marks[which] = L.marker([lat, lon], { icon: pin(which === 'from' ? '#15803d' : '#b91c1c') }).addTo(markLayer).bindTooltip(which === 'from' ? 'Start' : 'Destination');
+  updateGo();
+}
+
+// ---- data loading with IndexedDB cache ----
+function idb() { return new Promise((res, rej) => { try { const r = indexedDB.open('rav-cache', 1); r.onupgradeneeded = () => r.result.createObjectStore('layers'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); }
+async function cacheGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction('layers').objectStore('layers').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch { return null; } }
+async function cachePut(k, v) { try { const db = await idb(); db.transaction('layers', 'readwrite').objectStore('layers').put(v, k); } catch { } }
+async function fetchLayer(id, fields, onPage) {
+  let out = [], off = 0;
+  for (let page = 0; page < 50; page++) {
+    const url = `${BASE}${id}/query?where=1%3D1&outFields=${fields}&outSR=4326&geometryPrecision=6&f=geojson&resultOffset=${off}&resultRecordCount=2000`;
+    const r = await fetch(url); if (!r.ok) throw new Error('Main Roads server returned ' + r.status);
+    const j = await r.json(); if (j.error) throw new Error(j.error.message || 'Main Roads query error');
+    out = out.concat(j.features || []); onPage && onPage(out.length);
+    const more = j.exceededTransferLimit || (j.properties && j.properties.exceededTransferLimit);
+    if (!more || !(j.features || []).length) break; off += 2000;
+  }
+  return out;
+}
+async function loadNetwork(n, force) {
+  const key = 'v2-net' + n, cached = !force && await cacheGet(key);
+  if (cached && Date.now() - cached.t < CACHE_DAYS * 864e5) return cached;
+  const L_ = LAYERS[n]; const lines = [];
+  for (const [i, id] of L_.lines.entries()) {
+    const f = await fetchLayer(id, 'ROAD,ROAD_NAME,NETWORK_TYPE,CONDITION,COMMENTS,CURFEW,MAX_SPEED', c => status(`Downloading Network ${n} from Main Roads… ${lines.length + c} road sections`));
+    f.forEach(x => x.properties._cond = i === 0); lines.push(...f);
+  }
+  status('Downloading turn restrictions and bridges…');
+  const ints = await fetchLayer(L_.ints, 'NODE_DESCR,CONDITION').catch(() => []);
+  const br = await fetchLayer(L_.br, '*').catch(() => []);
+  const rec = { t: Date.now(), lines, ints, br };
+  cachePut(key, rec); return rec;
+}
+
+let G = null, DATA = null, curNet = null, RTAA = [];
+const asmLayer = L.layerGroup().addTo(map);
+const tcase = t => (t || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+async function loadAssembly() {
+  let c = await cacheGet('rtaa');
+  if (!c || Date.now() - c.t > CACHE_DAYS * 864e5) { try { c = { t: Date.now(), f: await fetchLayer(0, 'ROAD_NAME,IIT_DESC,LG_NAME') }; cachePut('rtaa', c); } catch { c = c || { f: [] }; } }
+  RTAA = c.f.filter(f => f.geometry).map(f => ({ at: f.geometry.coordinates, name: tcase(f.properties.IIT_DESC || 'Road train assembly area').replace(/Road Train Assembly Area/i, 'RTAA'), road: f.properties.ROAD_NAME, lg: f.properties.LG_NAME }));
+  asmLayer.clearLayers();
+  const ic = L.divIcon({ className: '', html: '<div title="Road train assembly area" style="background:#1d2329;color:#fff;font:700 10px system-ui;padding:2px 4px;border-radius:4px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)">RTAA</div>', iconSize: [36, 18], iconAnchor: [18, 9] });
+  RTAA.forEach(a => L.marker([a.at[1], a.at[0]], { icon: ic }).addTo(asmLayer).bindPopup(`<b>${esc(a.name)}</b><br>${esc(a.road || '')}${a.lg ? ', ' + esc(a.lg) : ''}`));
+}
+loadAssembly();
+async function prepare(force) {
+  const n = +$('net').value; curNet = n; G = null; updateGo();
+  $('go').textContent = 'Loading network…'; routeLayer.clearLayers(); $('result').innerHTML = '';
+  try {
+    DATA = await loadNetwork(n, force);
+    if (curNet !== n) return;
+    status('Building road graph…'); await new Promise(r => setTimeout(r, 20));
+    const t0 = performance.now();
+    G = RAV.build(DATA.lines, DATA.ints, DATA.br);
+    drawNetwork();
+    const age = Math.round((Date.now() - DATA.t) / 36e5);
+    $('dataInfo').textContent = `Network ${n}: ${DATA.lines.length} road sections, ${DATA.ints.length} intersection rules. Data ${age < 1 ? 'downloaded just now' : 'cached ' + (age < 48 ? age + ' h' : Math.round(age / 24) + ' days') + ' ago'}.`;
+    status(`Network ${n} ready (${((performance.now() - t0) / 1000).toFixed(1)} s).`);
+  } catch (e) {
+    if (netFail(e)) { showBlocked(); status('Could not reach Main Roads WA.'); }
+    else status('Could not load Main Roads data: ' + e.message + '. Check your connection and try Refresh.');
+  }
+  $('go').textContent = 'Find route'; updateGo();
+}
+function drawNetwork() {
+  netLayer.clearLayers(); if (!$('showNet').checked || !DATA) return;
+  const r = L.canvas({ padding: 0.3 });
+  L.geoJSON({ type: 'FeatureCollection', features: DATA.lines }, { renderer: r, interactive: false, style: f => ({ color: f.properties._cond ? '#e08a1e' : '#2e9d5b', weight: 2, opacity: 0.75 }) }).addTo(netLayer);
+}
+function updateGo() { $('go').disabled = !(G && (P.from || $('from').value.trim()) && (P.to || $('to').value.trim())); }
+
+// ---- geocoding ----
+const WA = { west: 112, south: -35.3, east: 129.2, north: -13.5 };
+const inWA = (lat, lon) => lat >= WA.south && lat <= WA.north && lon >= WA.west && lon <= WA.east;
+const shortAddr = a => (a || '').replace(/, Australia$/, '');
+async function geocodeGoogle(q) {
+  const out = [];
+  if (/^\s*(lot\s+|unit\s+)?\d/i.test(q)) { // street address: autocomplete predictions are exact (the demo key can't use the geocoder)
+    try {
+      const tok = new gLib.Token();
+      const { suggestions } = await gLib.Auto.fetchAutocompleteSuggestions({ input: q, includedRegionCodes: ['au'], locationRestriction: WA, sessionToken: tok });
+      const top = suggestions.filter(x => x.placePrediction).slice(0, 3);
+      const got = await Promise.all(top.map(async x => { const pl = x.placePrediction.toPlace(); await pl.fetchFields({ fields: ['location', 'formattedAddress'] }); return { lat: pl.location.lat(), lon: pl.location.lng(), label: shortAddr(x.placePrediction.text.text) }; }).map(p => p.catch(() => null)));
+      got.forEach(x => { if (x && inWA(x.lat, x.lon)) out.push(x); });
+    } catch { }
+    if (out.length) return out;
+  }
+  try { const { places } = await gLib.Place.searchByText({ textQuery: q, fields: ['displayName', 'formattedAddress', 'location'], locationRestriction: WA, maxResultCount: 5 });
+    places.forEach(p => { const lat = p.location.lat(), lon = p.location.lng(); const addr = shortAddr(p.formattedAddress); const nm = p.displayName && !addr.startsWith(p.displayName) ? p.displayName + ', ' : ''; out.push({ lat, lon, label: nm + addr }); });
+  } catch (e) { if (!out.length) throw e; }
+  const seen = new Set(); return out.filter(x => { const k = x.lat.toFixed(4) + x.lon.toFixed(4); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
+}
+async function geocode(q) {
+  const m = q.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if (m) { let a = +m[1], b = +m[2]; if (a > 0 && b < 0) [a, b] = [b, a]; return [{ lat: a, lon: b, label: `${a.toFixed(5)}, ${b.toFixed(5)}` }]; }
+  if (G_OK) { try { const r = await geocodeGoogle(q); if (r.length) return r; } catch (e) { gNote('Google search unavailable right now; using free search.'); } }
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=au&limit=5&viewbox=112,-13.5,129.2,-35.3&bounded=1&q=' + encodeURIComponent(q);
+  const r = await fetch(url, { headers: { 'Accept-Language': 'en' } }); const j = await r.json();
+  return j.map(x => ({ lat: +x.lat, lon: +x.lon, label: x.display_name.replace(/, Western Australia.*$/, ', WA') }));
+}
+async function resolveInput(which) { // returns true when the point is set
+  const q = $(which).value.trim(); const box = $(which + 'Choices');
+  if (!q) return false; if (P[which] && P[which].label === q) return true;
+  box.innerHTML = ''; box.className = '';
+  status('Searching…');
+  try {
+    const res = await geocode(q);
+    if (!res.length) { status('No match in WA for "' + q + '".'); return false; }
+    if (res.length === 1) { setPoint(which, res[0].lon, res[0].lat, res[0].label); map.setView([res[0].lat, res[0].lon], 10); status(''); return true; }
+    box.className = 'choices';
+    res.forEach(x => { const d = document.createElement('div'); d.textContent = x.label; d.onclick = () => { setPoint(which, x.lon, x.lat, x.label); box.innerHTML = ''; box.className = ''; map.setView([x.lat, x.lon], 10); }; box.appendChild(d); });
+    status('Pick the right place, then press Find route.');
+  } catch (e) { if (netFail(e)) { showBlocked(); status('Address search could not connect.'); } else status('Address search failed: ' + e.message); }
+  return false;
+}
+for (const w of ['from', 'to']) {
+  $(w).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); resolveInput(w); } });
+  $(w).addEventListener('input', () => { if (P[w] && $(w).value !== P[w].label) { P[w] = null; } updateGo(); suggest(w); });
+}
+// type-ahead suggestions (Google only)
+const sTimer = {}, sToken = {}, sSeq = {};
+function suggest(w) {
+  clearTimeout(sTimer[w]); const q = $(w).value.trim(); const box = $(w + 'Choices');
+  if (!G_OK || q.length < 3 || /^-?\d+(\.\d+)?\s*,/.test(q)) return;
+  sTimer[w] = setTimeout(async () => {
+    const seq = sSeq[w] = (sSeq[w] || 0) + 1;
+    try {
+      if (!sToken[w]) sToken[w] = new gLib.Token();
+      const { suggestions } = await gLib.Auto.fetchAutocompleteSuggestions({ input: q, includedRegionCodes: ['au'], locationRestriction: WA, sessionToken: sToken[w] });
+      if (seq !== sSeq[w] || $(w).value.trim() !== q) return;
+      box.innerHTML = ''; box.className = suggestions.length ? 'choices' : '';
+      suggestions.slice(0, 5).forEach(sg => { const pp = sg.placePrediction; if (!pp) return; const d = document.createElement('div'); d.textContent = shortAddr(pp.text.text);
+        d.onmousedown = e => e.preventDefault();
+        d.onclick = async () => { try { const pl = pp.toPlace(); await pl.fetchFields({ fields: ['location', 'formattedAddress', 'displayName'] }); sToken[w] = null; box.innerHTML = ''; box.className = ''; const lat = pl.location.lat(), lon = pl.location.lng(); setPoint(w, lon, lat, shortAddr(pp.text.text)); map.setView([lat, lon], 12); } catch (e) { status('Could not look up that place: ' + e.message); } };
+        box.appendChild(d); });
+    } catch { /* fall back to Enter / Find route search */ }
+  }, 350);
+}
+$('gps').onclick = () => {
+  if (!navigator.geolocation) { status('Location not available in this browser.'); return; }
+  status('Getting your location…');
+  navigator.geolocation.getCurrentPosition(p => { setPoint('from', p.coords.longitude, p.coords.latitude, 'My location'); map.setView([p.coords.latitude, p.coords.longitude], 11); status(''); },
+    e => status('Could not get location: ' + e.message), { enableHighAccuracy: true, timeout: 15000 });
+};
+let pickMode = '';
+document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { pickMode = b.dataset.pick; document.querySelectorAll('[data-pick]').forEach(x => x.classList.toggle('on', x === b)); });
+map.on('click', e => { if (!pickMode) return; setPoint(pickMode, e.latlng.lng, e.latlng.lat, `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`); if (pickMode === 'from') { document.querySelector('[data-pick="to"]').click(); } else { document.querySelector('[data-pick=""]').click(); } });
+
+// ---- routing + rendering ----
+const ARROW = i => /sharp left/.test(i) ? '↰' : /sharp right/.test(i) ? '↱' : /left/.test(i) ? (/Bear/.test(i) ? '↖' : '←') : /right/.test(i) ? (/Bear/.test(i) ? '↗' : '→') : /Start/.test(i) ? '●' : '↑';
+$('go').onclick = async () => {
+  if (!G) return;
+  const okFrom = await resolveInput('from'); if (!okFrom) return;
+  const okTo = await resolveInput('to'); if (!okTo) return;
+  status('Finding a legal route…');
+  setTimeout(() => {
+    const t0 = performance.now();
+    const r = RAV.route(G, [P.from.lon, P.from.lat], [P.to.lon, P.to.lat]);
+    render(r, performance.now() - t0);
+  }, 10);
+};
+function render(r, ms) {
+  routeLayer.clearLayers(); const box = $('result'); box.innerHTML = '';
+  if (r.error) { box.innerHTML = `<div class="card bad">${esc(r.error)}<div class="hint">The two points may be on parts of the network that don't connect for this vehicle. Try a nearby town, or a higher category only if you're approved for it.</div></div>`; status(''); return; }
+  const ll = r.line.map(c => [c[1], c[0]]);
+  L.polyline(ll, { color: '#fff', weight: 9, opacity: 0.9 }).addTo(routeLayer);
+  const pl = L.polyline(ll, { color: '#0b62d6', weight: 5 }).addTo(routeLayer);
+  const gaps = [];
+  for (const [w, sn] of [['from', r.s], ['to', r.t]]) {
+    if (sn.d > OFF_NET_M) {
+      L.polyline([[P[w].lat, P[w].lon], [sn.pt[1], sn.pt[0]]], { color: '#b91c1c', weight: 4, dashArray: '6 8' }).addTo(routeLayer);
+      gaps.push(w === 'from' ? `Your start is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The route begins where you join it.` : `Your destination is <b>${fmtKm(sn.d)}</b> (straight line) from the approved network. The approved route ends at the red dashed line; the last leg needs road-owner approval or a different vehicle.`);
+    }
+  }
+  map.fitBounds(pl.getBounds().extend([P.from.lat, P.from.lon]).extend([P.to.lat, P.to.lon]), { padding: [30, 30] });
+  const hard = r.conditions.filter(c => c.notThrough);
+  let h = `<div class="card"><div class="big">${fmtKm(r.total)} · ${fmtTime(r.secs)}</div><div class="hint">On Tandem Drive Network ${curNet} roads only. Time assumes 90 km/h on state roads, 70 km/h on local roads (or posted RAV limits), with no stops.</div></div>`;
+  h += `<div class="drive"><button class="go" id="startDrive">▶ Start driving</button><button id="demoDrive" title="Plays the route as if driving, so you can hear the directions">Demo drive</button></div>`;
+  if (gaps.length) h += `<div class="card warn">${gaps.join('<br><br>')}</div>`;
+  const nearAsm = p => RTAA.map(a => ({ ...a, d: RAV.hav([p.lon, p.lat], a.at) })).sort((x, y) => x.d - y.d)[0];
+  const asmNotes = [];
+  for (const [w, lbl] of [['from', 'start'], ['to', 'destination']]) { const a = nearAsm(P[w]); if (a && a.d < 60000) asmNotes.push(`Nearest road train assembly area to your ${lbl}: <b>${esc(a.name)}</b> (${esc(a.road || '')}, ${fmtKm(a.d)} away).`); }
+  if (asmNotes.length) h += `<div class="card">${asmNotes.join('<br>')}<div class="hint">If you're coming in or out of Perth metro, the road train usually makes up or breaks down at one of these, so plan the road train leg from there.</div></div>`;
+  if (r.rulesNear.length) h += `<div class="card warn">${r.rulesNear.length} intersection restriction${r.rulesNear.length > 1 ? 's' : ''} on or near this route. The route avoids the ones it could read, but check the list below.</div>`;
+  h += `<div class="sect">Directions <button class="small" id="copy">Copy</button></div><ol class="steps">`;
+  r.steps.forEach((s, i) => { h += `<li data-i="${i}"><span class="arrow">${ARROW(s.instr)}</span><span>${esc(s.instr)} <b>${esc(s.name)}</b></span><span class="dist">${fmtKm(s.len)}</span></li>`; });
+  h += `<li><span class="arrow">⚑</span><span>Arrive at destination</span><span></span></li></ol>`;
+  if (r.conditions.length) {
+    h += `<div class="sect">Conditions on this route (${r.conditions.length})</div>`;
+    r.conditions.sort((a, b) => b.notThrough - a.notThrough).forEach((c, i) => { h += `<div class="cond ${c.notThrough ? 'hard' : ''}" data-c="${i}"><b>${esc(c.road)}</b>${esc(c.text)}</div>`; });
+  }
+  if (r.rulesNear.length) {
+    h += `<div class="sect">Intersection restrictions near route</div>`;
+    r.rulesNear.forEach((x, i) => { h += `<div class="cond" data-r="${i}"><b>${esc(x.where || 'Intersection')}</b>${esc(x.text)}${x.parsed ? '' : ' <i>(not read automatically, check manually)</i>'}</div>`; });
+  }
+  if (r.bridgesNear.length) {
+    h += `<div class="sect">Bridges listed for this network near route</div>`;
+    r.bridgesNear.forEach(b => { h += `<div class="cond hard"><b>Bridge</b>${esc(Object.entries(b.props).filter(([k, v]) => v && !/OBJECTID|GlobalID/i.test(k)).map(([k, v]) => k + ': ' + RAV.stripHtml(String(v)).join(' ')).join(' · '))}</div>`; });
+  }
+  box.innerHTML = h;
+  box.querySelectorAll('li[data-i]').forEach(li => li.onclick = () => { const s = r.steps[+li.dataset.i]; map.setView([s.at[1], s.at[0]], 14); });
+  const conds = r.conditions;
+  box.querySelectorAll('[data-c]').forEach(el => el.onclick = () => { const c = conds[+el.dataset.c]; map.setView([c.at[1], c.at[0]], 13); });
+  box.querySelectorAll('[data-r]').forEach(el => el.onclick = () => { const x = r.rulesNear[+el.dataset.r]; map.setView([x.at[1], x.at[0]], 16); });
+  $('copy').onclick = async () => {
+    const txt = [`${P.from.label} → ${P.to.label} (Network ${curNet})`, `${fmtKm(r.total)}, ${fmtTime(r.secs)}`, ...r.steps.map((s, i) => `${i + 1}. ${s.instr} ${s.name} (${fmtKm(s.len)})`), 'Arrive', ...(conds.length ? ['', 'Conditions:', ...conds.map(c => `- ${c.road}: ${c.text}`)] : []), '', 'Planning aid only, check the Main Roads RAV Map.'].join('\n');
+    try { await navigator.clipboard.writeText(txt); status('Directions copied.'); } catch { status('Copy not allowed here.'); }
+  };
+  LAST = r; window.__dbgLast = () => LAST;
+  $('startDrive').onclick = () => drive(false);
+  $('demoDrive').onclick = () => drive(true);
+  status(`Route found in ${(ms / 1000).toFixed(1)} s.`);
+}
+// ---- driving mode wiring ----
+let LAST = null, follow = true;
+map.on('dragstart', () => { if (NAV.isActive()) follow = false; });
+function drawRouteOnly(r) {
+  routeLayer.clearLayers(); const ll = r.line.map(c => [c[1], c[0]]);
+  L.polyline(ll, { color: '#fff', weight: 9, opacity: 0.9 }).addTo(routeLayer); L.polyline(ll, { color: '#0b62d6', weight: 5 }).addTo(routeLayer);
+}
+function drive(demo) {
+  if (!LAST) return; follow = true;
+  const endInfo = LAST.t.d > OFF_NET_M ? `Your destination is ${fmtKm(LAST.t.d)} further, off the approved network.` : null;
+  const ok = NAV.start(LAST, {
+    ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash') },
+    map, arrow: ARROW, net: curNet, endInfo, follow: () => follow, simSpeed: () => 1,
+    reroute: pt => { const r = RAV.route(G, pt, [P.to.lon, P.to.lat]); if (r && !r.error) LAST = r; return r; },
+    drawRoute: drawRouteOnly
+  }, demo);
+  setTimeout(() => map.invalidateSize(), 50);
+  if (ok && !demo) status('Driving mode on. Keep this screen open.');
+}
+$('nStop').onclick = () => { NAV.stop(); setTimeout(() => { map.invalidateSize(); if (LAST) render(LAST, 0); }, 50); };
+$('nCentre').onclick = () => { follow = true; };
+let isMuted = false; $('nMute').onclick = () => { isMuted = !isMuted; NAV.setMuted(isMuted); $('nMute').textContent = isMuted ? '🔇' : '🔊'; };
+// voice input
+document.querySelectorAll('[data-mic]').forEach(b => {
+  if (!VOICE.supported) { b.style.display = 'none'; return; }
+  b.onclick = () => { const w = b.dataset.mic;
+    VOICE.listen(txt => { $(w).value = txt; P[w] = null; updateGo(); resolveInput(w); },
+      (st, err) => { b.classList.toggle('on', st === 'listening'); if (st === 'listening') status('Listening… say a town, address or place.'); if (st === 'error') status(err === 'not-allowed' ? 'Microphone blocked. Allow it in the browser (the hosted link works best on phones).' : 'Didn\'t catch that (' + err + '). Try again.'); });
+  };
+});
+
+$('net').onchange = () => prepare(false);
+$('refresh').onclick = () => prepare(true);
+$('showNet').onchange = drawNetwork;
+prepare(false);
+})();
+</script>
+</body>
+</html>
