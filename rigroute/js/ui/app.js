@@ -25,7 +25,7 @@
   RR.facIcon = f => f.kind === 'rtaa' ? 'truck' : f.kind === 'hvrest' ? 'parking' : f.kind === 'rest' ? 'rest' : f.kind === 'roadhouse' ? 'food' : (FAC.find(c => c.key === f.cat) || {}).icon || 'pin';
 
   // ---------- sheets & tabs ----------
-  const SHEETS = ['plan', 'route', 'alerts', 'stops', 'profile', 'vedit', 'layers', 'report'];
+  const SHEETS = ['plan', 'route', 'alerts', 'stops', 'profile', 'vedit', 'layers', 'report', 'addstop'];
   function openSheet(name) {
     SHEETS.forEach(n => $('sheet-' + n).classList.toggle('on', n === name));
     document.body.classList.toggle('sheet-open', !!name);
@@ -255,7 +255,7 @@
   // ---------- driving ----------
   let follow = true;
   function drive(demo) {
-    const r = app.RES.routes[app.sel]; if (!r) return; follow = true;
+    const r = app.RES.routes[app.sel]; if (!r) return; follow = true; app.demo = !!demo; app.reached = 0;
     const endInfo = r.t.d > 300 ? `Your destination is ${fmtKm(r.t.d)} further, off the approved network.` : null;
     const ok = NAV.start(r, {
       map: RR.map.get(), arrow: ARROW, net: RR.net(app.PROF.net).short, endInfo, follow: () => follow, simSpeed: () => 1,
@@ -473,6 +473,131 @@
       if (ahead > 0 && ahead < 1500 && RAV.hav(p, a.at) < 1800) { warned.add(a.id); const t = RR.reports.type(a.rtype); NAV._say(`Reported ahead: ${t.label.toLowerCase()}${a.report.note ? ', ' + a.report.note.toLowerCase() : ''}, in ${ahead < 950 ? Math.round(ahead / 100) * 100 + ' metres' : (ahead / 1000).toFixed(1) + ' kilometres'}.`); $('flash').textContent = `⚠ ${t.label} reported ahead (${fmtKm(ahead)})`; $('flash').classList.add('on'); setTimeout(() => $('flash').classList.remove('on'), 6000); }
     }
   }
+
+
+  // ---------- add a stop while driving ----------
+  RR.on('stopreached', n => { app.reached = Math.max(app.reached || 0, n); });
+  const AS_CATS = [
+    { key: 'diesel', label: 'Diesel', icon: 'fuel', mr: f => f.tags.includes('diesel') || f.kind === 'roadhouse', g: 'diesel truck stop', say: 'diesel' },
+    { key: 'toilet', label: 'Toilets / rest', icon: 'rest', mr: f => f.tags.includes('toilets') || f.kind === 'hvrest' || f.kind === 'roadhouse', say: 'toilet stop' },
+    { key: 'food', label: 'Food', icon: 'food', mr: f => f.kind === 'roadhouse' || f.tags.includes('food'), g: 'roadhouse cafe', say: 'food stop' },
+    { key: 'parking', label: 'Truck parking', icon: 'parking', mr: f => f.kind === 'hvrest' || f.kind === 'rtaa' || f.tags.includes('parking'), say: 'truck parking' }
+  ];
+  let asCat = 'diesel', asItems = [];
+  function hereOnRoute() {
+    const r = app.RES && app.RES.routes[app.sel]; if (!r) return null;
+    const pos = navPos || (app.ME ? [app.ME.lon, app.ME.lat] : r.line[0]);
+    const near = alongIdx(r); const here = near(pos) ?? 0;
+    return { r, pos, near, here };
+  }
+  // distance from a point to the route (rough, sampled) for detour estimates
+  function offRoute(r, p) { const L = r.line, st = Math.max(1, Math.floor(L.length / 2000)); let b = 1e12; for (let i = 0; i < L.length; i += st) b = Math.min(b, RAV.hav(p, L[i])); return b; }
+  async function findAhead(catKey) {
+    const h = hereOnRoute(); if (!h) return [];
+    const cat = AS_CATS.find(c => c.key === catKey);
+    let items = S.facilities.filter(cat.mr).map(f => ({ ...f, src: 'mr' }));
+    if (cat.g && RR.google.ok()) {
+      const ahead = h.r.line.filter((p, i) => i % Math.max(1, Math.floor(h.r.line.length / 400)) === 0).filter(p => { const d = h.near(p); return d != null && d > h.here && d < h.here + 300000; });
+      const probes = [0, 0.15, 0.4, 0.7].map(f => ahead[Math.floor(f * (ahead.length - 1))]).filter(Boolean);
+      for (const p of probes) { const k = 'as' + cat.key + p.map(v => v.toFixed(2)).join(); if (!gCache.has(k)) gCache.set(k, RR.google.nearby(cat.g, p, 40, 8).catch(() => [])); (await gCache.get(k)).forEach(g => { if (!items.some(i => RAV.hav(i.at, g.at) < 200)) items.push({ ...g, kind: 'g', tags: [], src: 'g' }); }); }
+    }
+    const already = (app.RUN ? app.RUN.pts.slice(1) : []);
+    return items.filter(f => !already.some(p => RAV.hav(p, f.at) < 250)).map(f => { const d = h.near(f.at); if (d == null || d < h.here + 300) return null; const off = offRoute(h.r, f.at); return off > 5000 ? null : { ...f, ahead: d - h.here, off }; }).filter(Boolean).sort((x, y) => x.ahead - y.ahead).slice(0, 25);
+  }
+  async function openAddStop(catKey) {
+    if (catKey) asCat = catKey;
+    $('asCats').innerHTML = AS_CATS.map(c => `<button class="chip ${c.key === asCat ? 'on' : ''}" data-c="${c.key}">${RR.icon(c.icon)}${c.label}</button>`).join('');
+    $('asCats').querySelectorAll('[data-c]').forEach(b => b.onclick = () => openAddStop(b.dataset.c));
+    $('asList').innerHTML = '<li><span class="tx"><b>Looking ahead on your route…</b></span></li>';
+    $('asNote').textContent = 'Places within 5 km of your route, ahead of you. Main Roads rest areas and roadhouses; diesel and food also from Google listings (check truck access).';
+    if (app.sheet !== 'addstop') openSheet('addstop');
+    const want = asCat; asItems = await findAhead(asCat); if (want !== asCat) return;
+    $('asList').innerHTML = asItems.length ? asItems.map((f, k) => `<li data-k="${k}"><span class="ico lime">${RR.icon(RR.facIcon(f.src === 'g' ? { cat: asCat === 'diesel' ? 'diesel' : 'food' } : f))}</span><span class="tx"><b>${esc(f.name)}</b><small>${fmtKm(f.ahead)} ahead · ${f.off < 150 ? 'on your route' : fmtKm(f.off) + ' off route'}</small><small style="color:var(--dim)">${esc(f.source || '')}</small></span><button class="btn primary add" data-add="${k}">Add</button></li>`).join('') : '<li><span class="tx"><b>Nothing found ahead</b><small>Try another type, or search for a place below.</small></span></li>';
+    $('asList').querySelectorAll('[data-add]').forEach(b => b.onclick = e => { e.stopPropagation(); insertStop(asItems[+b.dataset.add]); });
+    $('asList').querySelectorAll('[data-k]').forEach(li => li.onclick = () => { const f = asItems[+li.dataset.k]; RR.map.get().setView([f.at[1], f.at[0]], 14); follow = false; });
+  }
+  $('nAddStop').onclick = () => openAddStop();
+  $('asGo').onclick = async () => { const q = $('asQ').value.trim(); if (!q) return; const res = await RR.geocode(q).catch(() => []); if (!res[0]) return toast('No match for that place.'); insertStop({ name: res[0].label, at: [res[0].lon, res[0].lat] }); };
+  $('asQ').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('asGo').click(); } });
+  $('asMic').onclick = () => VOICE.supported ? VOICE.listen(t => { $('asQ').value = t; $('asGo').click(); }, () => { }) : toast('Voice input isn\'t available in this browser.');
+  // reroute: current position -> new stop -> remaining stops -> destination, and keep driving
+  function insertStop(f) {
+    const h = hereOnRoute(); if (!h) return;
+    const run = app.RUN, done = app.reached || 0;
+    const restPts = run.pts.slice(1 + done, -1), restLabs = run.labels.slice(1 + done, -1);
+    const pts = [h.pos, f.at, ...restPts, run.pts[run.pts.length - 1]], labels = ['Current position', f.name, ...restLabs, run.labels[run.labels.length - 1]];
+    const G = S.data.general ? S.local.g || S.base : S.base;
+    const nr = RR.routing.reroute(G, pts, labels, 1);
+    if (!nr || nr.error) return toast(`Couldn't find a legal route via ${f.name} for this vehicle.`, 5000);
+    const prev = { run: app.RUN, route: app.RES.routes[app.sel] };
+    const old = prev.route;
+    nr.conf = old.conf; nr.tight = old.tight; nr.zones = old.zones; nr.metro = old.metro; nr.label = old.label; nr.along = RR.routing.alongRoute(nr);
+    const extra = (nr.trueSecs || nr.secs) - ((old.trueSecs || old.secs) * Math.max(0, 1 - h.here / (old.total || 1)));
+    app.RUN = { ids: [], pts, labels }; app.RES.routes[app.sel] = nr;
+    openSheet(null); NAV.stop(); drive(app.demo);
+    paintWaypoints2(pts, labels);
+    const mins = Math.max(1, Math.round(extra / 60)); NAV._say(`Stop added: ${f.name.split(',')[0]}. About ${mins} minute${mins > 1 ? 's' : ''} extra.`, true);
+    toastUndo(`Stop added: ${f.name.split(',')[0]} (+${Math.max(1, Math.round(extra / 60))} min)`, () => { app.RUN = prev.run; app.RES.routes[app.sel] = prev.route; NAV.stop(); drive(app.demo); });
+  }
+  function paintWaypoints2(pts, labels) { RR.map.setWaypoints(pts.map((p, i) => ({ lon: p[0], lat: p[1], kind: i === 0 ? 'start' : i === pts.length - 1 ? 'end' : 'stop', n: i > 0 && i < pts.length - 1 ? i : '' })).slice(1)); }
+
+  // ---------- voice commands (reports and stops) ----------
+  const VTYPES = [
+    ['crash', /crash|accident|collision|smash|rollover|rolled/],
+    ['police', /police|cops?\b|coppers|booze bus|breath|rbt|radar|speed camera|inspection|inspector|transport officer|compliance/],
+    ['animal', /animal|cattle|cows?\b|stock|sheep|roo|kangaroo|emu|camel|horse|goat|livestock|road ?kill/],
+    ['flood', /flood|water over|water on|washout|washed out|floodway/],
+    ['fire', /fire|smoke|burning|bushfire/],
+    ['closure', /closed|closure|blocked|road block/],
+    ['roadworks', /road ?works|works|stop.?slow|lane closed|single lane|traffic control|lollipop/],
+    ['weighbridge', /weigh ?bridge|weighbridge|scales/],
+    ['clearance', /low (bridge|clearance|branch|tree|cable|wire)|clearance|branches|overhang/],
+    ['surface', /rough|corrugat|pothole|potholes|gravel|unsealed|dirt|bull ?dust|soft edge|dips?\b/],
+    ['hazard', /hazard|debris|object|tyre|tire|broken down|breakdown|stopped (car|truck|vehicle)|something on the road|on the road/]
+  ];
+  const VSTOPS = [['diesel', /diesel|fuel|servo|petrol|service station|fill up|refuel/], ['toilet', /toilet|loo|dunny|restroom|bathroom|rest (stop|area)|wee|pee|break/], ['food', /food|eat|feed|coffee|cafe|meal|hungry|roadhouse/], ['parking', /park(ing)?|sleep|kip|overnight|bay/]];
+  function parseVoice(text) {
+    const t = ' ' + text.toLowerCase() + ' ';
+    const stopIntent = /\b(find|add|need|want|next|nearest|stop for|pull (in|over)|where'?s|get)\b/.test(t) || /\bstop\b/.test(t) && !/stop.?slow/.test(t);
+    const reportIntent = /\b(report|there'?s|there is|watch out|look out|ahead|on the road)\b/.test(t);
+    const st = VSTOPS.find(([, re]) => re.test(t));
+    const rt = VTYPES.find(([, re]) => re.test(t));
+    if (st && (stopIntent || !rt) && !reportIntent) return { kind: 'stop', cat: st[0] };
+    if (rt) {
+      const T = RR.reports.type(rt[0]);
+      const DRE = { 'Kangaroos': /\broos?\b|kangaroo|wallab/, 'Livestock on road': /cattle|\bcows?\b|livestock|sheep|goats?|horses?|camels?|\bstock\b/, 'Stock crossing': /crossing/, 'Roadkill': /road ?kill|dead (roo|animal|cow)/, 'Debris / tyre': /tyre|tire|debris|load spill|spilt|spilled/, 'Object on road': /object|something on/, 'Pothole': /pothole/, 'Stopped vehicle': /stopped (car|vehicle)|car stopped/, 'Broken-down truck': /broken.?down|breakdown/, 'Water over road': /water over|water on/, 'Washout': /wash ?out|washed/, 'Floodway rising': /floodway|rising/, 'Stop/slow': /stop.?slow|lollipop|traffic control/, 'Lane closed': /lane closed/, 'Single lane': /single lane|one lane/, 'Gravel / loose surface': /gravel|loose/, 'Police': /police|cops?\b|coppers/, 'Heavy vehicle inspection': /inspection|inspector|transport officer|compliance/, 'Breath testing': /booze|breath|\brbt\b/, 'Low branches': /branch|tree/, 'Low cable': /cable|wire|power ?line/, 'Corrugations': /corrugat/, 'Soft edges': /soft (edge|shoulder)/, 'Bulldust': /bull ?dust/, 'Unsealed section': /unsealed|dirt/ };
+      const detail = (T.details || []).find(d => DRE[d] && DRE[d].test(t));
+      return { kind: 'report', type: rt[0], detail: detail || '', side: /other side|opposite|oncoming|other way/.test(t) ? 'other' : '' };
+    }
+    if (st) return { kind: 'stop', cat: st[0] };
+    if (/cancel|never ?mind|undo/.test(t)) return { kind: 'cancel' };
+    return null;
+  }
+  app.parseVoice = parseVoice;
+  function showListening(on, text, hint) { $('listening').classList.toggle('on', on); if (text) $('lsText').textContent = text; if (hint != null) $('lsHint').textContent = hint; }
+  function voiceCommand(mode) {
+    if (!VOICE.supported) return toast('Voice input isn\'t available in this browser. Chrome on Android supports it.');
+    try { speechSynthesis.cancel(); } catch { }
+    showListening(true, 'Listening…', mode === 'report' ? 'Say what you see, e.g. "cattle on the road" or "police on the other side"' : 'Say "report crash", "cattle on road", "find diesel" or "toilet stop"');
+    VOICE.listen(async text => {
+      const cmd = parseVoice(text);
+      if (!cmd || (mode === 'report' && cmd.kind === 'stop')) { showListening(true, `"${text}"`, 'Sorry, I didn\'t catch a report or stop in that. Tap the mic to try again.'); NAV._say('Sorry, I didn\'t get that.'); return setTimeout(() => showListening(false), 3500); }
+      showListening(false);
+      if (cmd.kind === 'cancel') return;
+      if (cmd.kind === 'report') { await sendReport(cmd.type, cmd.detail, cmd.side); const T = RR.reports.type(cmd.type); NAV._say(`${T.label}${cmd.detail ? ', ' + cmd.detail : ''} reported. Thanks.`); return; }
+      if (cmd.kind === 'stop') {
+        if (!NAV.isActive()) { openAddStop(cmd.cat); return; }
+        const list = await findAhead(cmd.cat); const cat = AS_CATS.find(c => c.key === cmd.cat);
+        if (!list.length) { NAV._say(`I couldn't find a ${cat.say} ahead on your route.`); return openAddStop(cmd.cat); }
+        const best = list.find(f => f.off < 2000) || list[0];
+        insertStop(best);
+      }
+    }, (st, err) => { if (st === 'error' || st === 'end') setTimeout(() => { if ($('lsText').textContent === 'Listening…') showListening(false); }, 300); if (st === 'error') toast(err === 'not-allowed' ? 'Microphone access is blocked for this site.' : 'Didn\'t catch that. Try again.'); });
+  }
+  app.voiceCommand = voiceCommand;
+  $('nVoice').onclick = () => voiceCommand('any');
+  $('repSay').onclick = () => voiceCommand('report');
+  $('listening').onclick = () => showListening(false);
 
   // ---------- profiles ----------
   function renderProfiles() {

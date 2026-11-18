@@ -71,11 +71,11 @@ const NAV = (() => {
       else if (dist <= mid && dist > now * 1.5 && !next.said.mid) { next.said.mid = 1; next.said.far = 1; say(`${speakDist(dist)}, ${lc1(speakInstr(next.step))}`); }
       else if (dist <= now && !next.said.now) {
         next.said.now = next.said.mid = next.said.far = 1;
-        if (next.step.stop) { reachedStop = Math.max(reachedStop, next.step.stop); say(`You've reached stop ${next.step.stop}, ${speakName(next.step.name)}.`, true); flash(`Stop ${next.step.stop} reached: ${next.step.name}`); }
+        if (next.step.stop) { reachedStop = Math.max(reachedStop, next.step.stop); try { RR.emit('stopreached', reachedStop); } catch { } say(`You've reached stop ${next.step.stop}, ${speakName(next.step.name)}.`, true); flash(`Stop ${next.step.stop} reached: ${next.step.name}`); }
         else say(speakInstr(next.step), true);
       }
       // stops passed without the 'now' call (e.g. GPS gap) still count as reached
-      for (const m of man) if (m.step.stop && m.d < along - 30) reachedStop = Math.max(reachedStop, m.step.stop);
+      for (const m of man) if (m.step.stop && m.d < along - 30) reachedStop = Math.max(reachedStop, m.step.stop); try { RR.emit('stopreached', reachedStop); } catch { }
       showBanner(next.step, dist, remain);
       junction(next, dist);
     } else { showBanner(null, remain, remain); junction(null, remain); }

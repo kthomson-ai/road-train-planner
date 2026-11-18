@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="css/rigroute.css?v=3">
+<link rel="stylesheet" href="css/rigroute.css?v=4">
 </head>
 <body>
 <div class="splash" id="splash"><div class="in"><img src="img/icon-192.png" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
@@ -120,6 +120,7 @@
   <div class="grab"></div>
   <header><h2 id="repTitle">Report</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
   <div class="body">
+    <button class="btn block" id="repSay" style="margin-bottom:12px"><span data-icon="mic"></span>Say it, e.g. "cattle on the road"</button>
     <div class="repgrid" id="repGrid"></div>
     <div id="repDetail" hidden>
       <div class="chips" id="repChips"></div>
@@ -129,6 +130,16 @@
     </div>
     <div class="hint" id="repWhere"></div>
     <div class="hint" id="repShare"></div>
+  </div>
+</section>
+<section class="sheet half" id="sheet-addstop" aria-label="Add a stop">
+  <div class="grab"></div>
+  <header><h2>Add a stop</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
+  <div class="body">
+    <div class="chips" id="asCats"></div>
+    <ul class="alist" id="asList"></ul>
+    <div class="row" style="display:flex;gap:8px;margin-top:10px"><input class="inp" id="asQ" placeholder="Or search a place or address" autocomplete="off" style="flex:1"><button class="iconbtn" id="asMic" aria-label="Say a place"><span data-icon="mic"></span></button><button class="iconbtn" id="asGo" aria-label="Search"><span data-icon="search"></span></button></div>
+    <div class="hint" id="asNote"></div>
   </div>
 </section>
 <section class="sheet" id="sheet-profile" aria-label="Vehicle profiles">
@@ -193,23 +204,25 @@
 <div id="flash"></div>
 <div id="junc"><div class="jl" id="jLabel"></div><svg id="jSvg" viewBox="-70 -70 140 140" preserveAspectRatio="xMidYMid slice"></svg><div class="jd" id="jDist"></div><div class="jbar"><i id="jBar"></i></div></div>
 <div id="navbot"><span class="eta" id="nEta"></span><button id="nReport" class="rep" aria-label="Report"><span data-icon="report"></span></button><button id="nMute" aria-label="Mute">🔊</button><button id="nCentre" aria-label="Recentre">⌖</button><button class="stop" id="nStop">End</button></div>
+<div id="drvFabs"><button id="nAddStop" aria-label="Add a stop"><span data-icon="plus"></span>Stop</button><button id="nVoice" aria-label="Voice command"><span data-icon="mic"></span></button></div>
+<div id="listening"><div class="lw"><span data-icon="mic"></span></div><b id="lsText">Listening…</b><small id="lsHint">Say "report crash", "cattle on road", "find diesel" or "toilet stop"</small></div>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.16.0/dist/Leaflet.GoogleMutant.js"></script>
-<script src="js/core.js?v=3"></script>
-<script src="js/nav.js?v=3"></script>
-<script src="js/services/config.js?v=3"></script>
-<script src="js/services/store.js?v=3"></script>
-<script src="js/services/mainroads.js?v=3"></script>
-<script src="js/services/google.js?v=3"></script>
-<script src="js/services/vehicles.js?v=3"></script>
-<script src="js/services/routing.js?v=3"></script>
-<script src="js/services/alerts.js?v=3"></script>
-<script src="js/services/reports.js?v=3"></script>
-<script src="js/ui/icons.js?v=3"></script>
-<script src="js/ui/theme.js?v=3"></script>
-<script src="js/ui/map.js?v=3"></script>
-<script src="js/ui/app.js?v=3"></script>
+<script src="js/core.js?v=4"></script>
+<script src="js/nav.js?v=4"></script>
+<script src="js/services/config.js?v=4"></script>
+<script src="js/services/store.js?v=4"></script>
+<script src="js/services/mainroads.js?v=4"></script>
+<script src="js/services/google.js?v=4"></script>
+<script src="js/services/vehicles.js?v=4"></script>
+<script src="js/services/routing.js?v=4"></script>
+<script src="js/services/alerts.js?v=4"></script>
+<script src="js/services/reports.js?v=4"></script>
+<script src="js/ui/icons.js?v=4"></script>
+<script src="js/ui/theme.js?v=4"></script>
+<script src="js/ui/map.js?v=4"></script>
+<script src="js/ui/app.js?v=4"></script>
 </body>
 </html>
