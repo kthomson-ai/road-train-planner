@@ -60,7 +60,9 @@ const RAV = (() => {
       if (p.CURFEW) conds.push('Curfew: ' + stripHtml(p.CURFEW).join(' '));
       const ms = parseFloat(p.MAX_SPEED);
       if (p.MAX_SPEED && !conds.some(c => /speed/i.test(c))) conds.push('Max speed ' + stripHtml(String(p.MAX_SPEED)).join(' ') + (isNaN(ms) ? '' : ' km/h'));
-      return { name: p.ROAD_NAME || 'Unnamed road', conds, notThrough: conds.some(c => NOT_THROUGH.test(c)), speed: (!isNaN(ms) && ms > 10 && ms < 120) ? ms : null, state: /state/i.test(p.NETWORK_TYPE || ''), unsealed: conds.some(c => /unsealed/i.test(c)) };
+      const hier = { 'Primary Distributor': 85, 'Regional Distributor': 80, 'Distributor A': 65, 'Distributor B': 55, 'Local Distributor': 50, 'Access Road': 40 }[p.ROAD_HIERARCHY];
+      const fwy = /\b(fwy|freeway)\b/i.test(p.ROAD_NAME || '');
+      return { name: p.ROAD_NAME || 'Unnamed road', conds, notThrough: conds.some(c => NOT_THROUGH.test(c)), speed: (!isNaN(ms) && ms > 10 && ms < 120) ? ms : fwy ? 90 : (hier || null), state: /state/i.test(p.NETWORK_TYPE || ''), unsealed: conds.some(c => /unsealed/i.test(c)) };
     });
     features.forEach((f, fi) => {
       const g = f.geometry; if (!g) return;
@@ -199,7 +201,7 @@ const RAV = (() => {
 
   // edge-based Dijkstra with turn bans
   function route(G, from, to, opts = {}) {
-    const blocked = opts.blocked || null;
+    const blocked = opts.blocked || null, slow = opts.slow || null;
     const s = snap(G, from, 50000, blocked), t = snap(G, to, 50000, blocked);
     if (!s || !t) return { error: 'Could not find the approved network near ' + (!s ? 'the start' : 'the destination') + '.' };
     const ends = new Set([s.ei, t.ei]);
@@ -231,7 +233,7 @@ const RAV = (() => {
         }
         if (banned(G, d, dout)) continue;
         const ei = dout >> 1;
-        if (blocked && blocked.has(ei) && !ends.has(ei)) continue; const nc = c + edgeCost(G, ei, G.E[ei].len, ends);
+        if (blocked && blocked.has(ei) && !ends.has(ei)) continue; const nc = c + edgeCost(G, ei, G.E[ei].len, ends) * (slow && slow.has(ei) ? 1.6 : 1);
         if (nc < dist[dout]) { dist[dout] = nc; prev[dout] = d; H.push(nc, dout); }
       }
     }
@@ -393,6 +395,9 @@ const RAV = (() => {
     }
     if (low.length) { const m = low.reduce((a, b) => a.maxH < b.maxH ? a : b); notes.push({ kind: 'height', text: `Avoiding ${low.length} overpass${low.length > 1 ? 'es' : ''} or rail bridge${low.length > 1 ? 's' : ''} with less than ${(H + 0.3).toFixed(2)} m clearance (your ${H.toFixed(2)} m plus the 300 mm margin). Lowest: ${m.maxH.toFixed(2)} m on ${m.road}${m.suburb ? ', ' + m.suburb : ''}.` }); }
     const zoneBan = W > 5.5 || Lm > 30, fwyBan = W > 2.5 && Lm > 25;
+    const slow = new Set(); // CBD streets: discouraged for every heavy vehicle
+    const allZones = data.allZones || data.zones || [];
+    G.E.forEach((e, ei) => { const mid = G.coords[e.path[Math.floor(e.path.length / 2)]]; if (allZones.some(z => inPoly(mid, z.poly))) slow.add(ei); });
     if (zoneBan || fwyBan) G.E.forEach((e, ei) => {
       if (fwyBan && /\b(fwy|freeway)\b/i.test(edgeName(G, ei))) blocked.add(ei);
       if (zoneBan) for (const z of data.zones || []) { const mid = G.coords[e.path[Math.floor(e.path.length / 2)]]; if (inPoly(mid, z.poly) || inPoly(G.coords[e.path[0]], z.poly)) { blocked.add(ei); break; } }
@@ -407,7 +412,7 @@ const RAV = (() => {
       for (const L of lines) for (let k = 0; k < L.length; k += Math.max(1, Math.floor(L.length / 12))) for (const { ei, d } of nearEdges(G, L[k], 15)) if (namesMatch(edgeName(G, ei), nm) || d < 3) { if (!blocked.has(ei)) pro++; blocked.add(ei); }
     }
     if (pro) notes.push({ kind: 'prohibited', text: 'Roads on the Main Roads Network 1 prohibited list are avoided.' });
-    return { blocked, notes, low };
+    return { blocked, slow, notes, low };
   }
   // structures near a finished route with tight clearance (within 0.5 m over the needed clearance)
   function tightStructures(line, data, H) {
