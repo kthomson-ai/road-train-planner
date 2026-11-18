@@ -9,22 +9,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="img/favicon-64.png?v=15">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=15">
+<link rel="icon" href="img/favicon-64.png?v=16">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=16">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="js/vendor/leaflet.css">
-<link rel="stylesheet" href="css/rigroute.css?v=15">
+<link rel="stylesheet" href="css/rigroute.css?v=16">
 </head>
 <body>
-<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=15" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
+<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=16" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
 
 <div id="map" aria-label="Map"></div>
 
 <!-- top: search + vehicle -->
 <div class="topbar">
   <div class="search">
-    <img src="img/logo-mark.png?v=15" alt="RigRoute">
+    <img src="img/logo-mark.png?v=16" alt="RigRoute">
     <input id="q" type="search" placeholder="Where to?" autocomplete="off" enterkeyhint="search" aria-label="Search destination">
     <button class="vchip" id="vchip" aria-label="Change vehicle"><span class="vi" data-icon="truck"></span><div><b id="vchipName">Vehicle</b><small id="vchipSub"></small></div></button>
   </div>
@@ -128,6 +128,7 @@
   <div class="grab"></div>
   <header><h2 id="repTitle">Report</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
   <div class="body">
+    <button class="link" id="nShare" style="display:block;margin:-4px 0 8px">Share my ETA with someone</button>
     <button class="link" id="repFb" style="display:block;margin:-4px 0 8px">Something wrong with the app or route? Send feedback</button>
     <button class="btn block" id="repSay" style="margin-bottom:12px"><span data-icon="mic"></span>Say it, e.g. "cattle on the road"</button>
     <div class="repgrid" id="repGrid"></div>
@@ -274,18 +275,18 @@
 </nav>
 
 <!-- driving mode -->
-<div id="navbar"><div class="na" id="nArrow">↑</div><div class="nd" id="nDist"></div><div class="ni" id="nInstr"></div></div>
+<div id="navbar"><div class="na" id="nArrow">↑</div><div class="nd" id="nDist"></div><div class="ni" id="nInstr"></div><button id="nMute" aria-label="Mute or unmute voice">🔊</button></div>
 <div id="flash"></div>
 <div id="junc"><div class="jl" id="jLabel"></div><svg id="jSvg" viewBox="-70 -70 140 140" preserveAspectRatio="xMidYMid slice"></svg><div class="jd" id="jDist"></div><div class="jbar"><i id="jBar"></i></div></div>
-<div id="navbot"><span class="eta" id="nEta"></span><button id="nReport" class="rep" aria-label="Report"><span data-icon="report"></span></button><button id="nMute" aria-label="Mute">🔊</button><button id="nCentre" aria-label="Recentre">⌖</button><button class="stop" id="nStop">End</button></div>
+<div id="navbot"><span class="eta" id="nEta"></span><button id="nReport" class="rep" aria-label="Report"><span data-icon="report"></span>Report</button><button id="nAddStop" aria-label="Add a stop"><span data-icon="plus"></span>Stop</button><button class="stop" id="nStop">End</button></div>
 <div id="closureBar"><span class="ci" data-icon="block"></span><div class="ct"><b id="cbTitle">Road closed ahead</b><small id="cbSub"></small></div><button class="btn primary" id="cbReroute">Reroute</button><button class="iconbtn" id="cbDismiss" aria-label="Dismiss"><span data-icon="x"></span></button></div>
 <div id="fatChip" hidden></div>
-<div id="drvFabs"><button id="nShare" aria-label="Share ETA"><span data-icon="copy"></span>ETA</button><button id="nAddStop" aria-label="Add a stop"><span data-icon="plus"></span>Stop</button><button id="nVoice" aria-label="Voice command"><span data-icon="mic"></span></button></div>
+<div id="drvFabs"><button id="nCentre" hidden aria-label="Re-centre the map">⌖ Re-centre</button><button id="nVoice" aria-label="Voice command"><span data-icon="mic"></span></button></div>
 <div id="listening"><div class="lw"><span data-icon="mic"></span></div><b id="lsText">Listening…</b><small id="lsHint">Say "report crash", "cattle on road", "find diesel" or "toilet stop"</small></div>
 <div id="netpill" hidden><span data-icon="alert"></span><span id="netText">No signal: navigation still works</span></div>
 <div id="disclaimer" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="dcTitle">
   <div class="mbox">
-    <img src="img/logo-pin.png?v=15" alt="" style="width:56px;height:56px">
+    <img src="img/logo-pin.png?v=16" alt="" style="width:56px;height:56px">
     <h2 id="dcTitle">Before you drive</h2>
     <p>RigRoute is a <b>planning aid</b>. It uses Main Roads WA network and live data, but data can be incomplete or out of date.</p>
     <ul>
@@ -303,22 +304,22 @@
 
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/Leaflet.GoogleMutant.js"></script>
-<script src="js/core.js?v=15"></script>
-<script src="js/nav.js?v=15"></script>
-<script src="js/services/config.js?v=15"></script>
-<script src="js/services/store.js?v=15"></script>
-<script src="js/services/mainroads.js?v=15"></script>
-<script src="js/services/google.js?v=15"></script>
-<script src="js/services/vehicles.js?v=15"></script>
-<script src="js/services/routing.js?v=15"></script>
-<script src="js/services/trip.js?v=15"></script>
-<script src="js/services/shared.js?v=15"></script>
-<script src="js/services/places.js?v=15"></script>
-<script src="js/services/alerts.js?v=15"></script>
-<script src="js/services/reports.js?v=15"></script>
-<script src="js/ui/icons.js?v=15"></script>
-<script src="js/ui/theme.js?v=15"></script>
-<script src="js/ui/map.js?v=15"></script>
-<script src="js/ui/app.js?v=15"></script>
+<script src="js/core.js?v=16"></script>
+<script src="js/nav.js?v=16"></script>
+<script src="js/services/config.js?v=16"></script>
+<script src="js/services/store.js?v=16"></script>
+<script src="js/services/mainroads.js?v=16"></script>
+<script src="js/services/google.js?v=16"></script>
+<script src="js/services/vehicles.js?v=16"></script>
+<script src="js/services/routing.js?v=16"></script>
+<script src="js/services/trip.js?v=16"></script>
+<script src="js/services/shared.js?v=16"></script>
+<script src="js/services/places.js?v=16"></script>
+<script src="js/services/alerts.js?v=16"></script>
+<script src="js/services/reports.js?v=16"></script>
+<script src="js/ui/icons.js?v=16"></script>
+<script src="js/ui/theme.js?v=16"></script>
+<script src="js/ui/map.js?v=16"></script>
+<script src="js/ui/app.js?v=16"></script>
 </body>
 </html>

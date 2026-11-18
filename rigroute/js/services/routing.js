@@ -29,12 +29,30 @@ RR.routing = (() => {
   }
   const closuresBlocking = () => state.alerts.filter(a => a.src === 'closure' && /clos/i.test(a.status) && !/open/i.test(a.status));
 
+  // Main Roads lists bridges a network must not cross ("Bridge not to be crossed.") or that have a mass limit
+  // ("...by vehicles over 11t"). These block the route. With no mass entered, a mass-limited bridge is treated as closed.
+  function bridgeRule(b, mass) {
+    const c = String((b.properties || b.props || {}).CONDITION || ''); if (!c) return null;
+    const m = c.match(/over\s+(\d+(?:\.\d+)?)\s*t/i);
+    if (m) return (!mass || mass > +m[1]) ? { limit: +m[1], unknown: !mass, text: c } : null;
+    return /not to be crossed/i.test(c) ? { limit: 0, text: c } : null;
+  }
+  function blockBridges(G, data, mass, r) {
+    let n = 0, unk = 0;
+    for (const b of (data && data.br) || []) {
+      if (!b.geometry) continue; const rule = bridgeRule(b, mass); if (!rule) continue;
+      let hit = 0; for (const { ei, d } of RAV.nearEdges(G, b.geometry.coordinates, 30)) if (RAV.namesMatch(RAV.edgeName(G, ei), (b.properties || {}).ROAD_NAME) || d < 8) { r.blocked.add(ei); hit++; }
+      if (hit) { n++; if (rule.unknown) unk++; }
+    }
+    if (n) r.notes.push({ kind: 'bridge', text: `Avoiding ${n} bridge${n > 1 ? 's' : ''} Main Roads lists as not to be crossed by this network or mass.${unk ? ' No total mass entered, so mass-limited bridges are treated as closed to you.' : ''}` });
+  }
   function restrictions(G, profile, pts, prefs) {
     const dims = RR.vehicles.dims(profile);
     const zones = C.zones.filter(z => !pts.some(p => RAV.inPoly(p, z.poly)));
     const key = [state.key, JSON.stringify(dims), profile.dg, JSON.stringify(prefs), zones.length, state.alerts.length, G === state.base ? 'b' : state.local.key].join('/');
     if (state.restr && state.restrKey === key && state.restrG === G) return state.restr;
     const r = RAV.restrictions(G, dims, { structures: state.structures, zones, allZones: C.zones, prohibited: state.data.prohibited || [] });
+    blockBridges(G, state.data, dims.mass, r);
     // placarded dangerous goods: Northbridge Tunnel
     if (profile.dg) { const b = C.dgTunnel.box; let n = 0; G.E.forEach((e, ei) => { const m = G.coords[e.path[Math.floor(e.path.length / 2)]]; if (m[0] > b[0] && m[0] < b[2] && m[1] > b[1] && m[1] < b[3] && C.dgTunnel.road.test(RAV.edgeName(G, ei))) { r.blocked.add(ei); n++; } }); if (n) r.notes.push({ kind: 'dg', text: 'Placarded dangerous goods: avoiding the Northbridge Tunnel (Graham Farmer Freeway).' }); }
     // live road closures
@@ -131,6 +149,7 @@ RR.routing = (() => {
     const r1 = restrictions(G1, profile, pts, prefs);
     const dims2 = RR.vehicles.dims(profile2), zones = C.zones.filter(z => !pts.some(p => RAV.inPoly(p, z.poly)));
     const r2 = RAV.restrictions(G2, dims2, { structures: state.structures, zones, allZones: C.zones, prohibited: d2.prohibited || [] });
+    blockBridges(G2, d2, dims2.mass, r2);
     const [a, b] = pts, direct = hav(a, b);
     const cands = rtaas.map(f => ({ f, score: hav(a, f.at) + hav(f.at, b) })).filter(x => x.score < direct * 1.6 + 30000).sort((x, y) => x.score - y.score).slice(0, 8);
     let best = null;
@@ -154,5 +173,5 @@ RR.routing = (() => {
     r.label = `Swap at ${f.name.replace(/road train assembly area/i, 'RTAA')}`;
     return r;
   }
-  return { state, prepare, plan, reroute, alongRoute, closuresBlocking, restrictions, planSwap };
+  return { state, prepare, plan, reroute, alongRoute, closuresBlocking, restrictions, planSwap, bridgeRule };
 })();

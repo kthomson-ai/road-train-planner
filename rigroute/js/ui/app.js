@@ -225,32 +225,51 @@
     $('routeTitle').textContent = `To ${app.RUN.labels[app.RUN.labels.length - 1].split(',')[0]}`;
     let h = '';
     res.routes.forEach((x, i) => { h += `<div class="ropt ${i === app.sel ? 'on' : ''}" data-r="${i}"><div class="t">${fmtT(x.trueSecs || x.secs)}</div><div class="d">${fmtKm(x.total)}</div><div class="lbl"><b>${esc(x.label)}</b>${(n => n ? `<span class="tag" style="color:var(--amber)">${n} alert${n > 1 ? 's' : ''}</span>` : '')(routeAlerts(x).length)}${x.conf.gaps.length ? '<span class="tag" style="color:var(--red)">Off-network leg</span>' : ''}</div>${confBar(x.conf)}</div>`; });
-    h += `<div class="legend" style="margin:-2px 0 12px"><span><i class="sw" style="background:#B7F23D"></i>Confirmed access</span>${S.data.general ? '<span><i class="sw" style="background:#7FA83A"></i>General access street</span>' : ''}<span><i class="sw" style="background:#FFB020"></i>With conditions</span><span><i class="sw" style="background:#F04444"></i>Not verified</span></div>`;
+    const legendHtml = `<div class="legend" style="margin:10px 0 6px"><span><i class="sw" style="background:#B7F23D"></i>Confirmed access</span>${S.data.general ? '<span><i class="sw" style="background:#7FA83A"></i>General access street</span>' : ''}<span><i class="sw" style="background:#FFB020"></i>With conditions</span><span><i class="sw" style="background:#F04444"></i>Not verified</span></div>`;
     const tc = RR.trip.timeChecks(r, app.LEAVE || new Date(), prof, pt => alongIdx(r)(pt));
     h += `<div class="dataage" style="margin-top:-4px"><i style="background:var(--blue)"></i><span>Leave ${RR.trip.hhmm(app.LEAVE || new Date())}, arrive about <b>${RR.trip.hhmm(tc.arrive)}</b>${tc.arrive.toDateString() !== (app.LEAVE || new Date()).toDateString() ? ' ' + tc.arrive.toLocaleDateString('en-AU', { weekday: 'short' }) : ''}${r.swap ? ' (includes ~30 min to drop trailers)' : ''}</span></div>`;
     h += `<div class="drivebar" style="position:static;margin:0 0 12px;padding:0;background:none"><button class="btn primary big" id="startDrive" style="flex:1">${RR.icon('play')}Start</button><button class="btn big" id="demoDrive">Demo</button></div>`;
-    h += `<div class="dataage" id="routeAge"><i></i><span>Checking Main Roads data…</span></div>`;
-    h += `<div class="rbtns"><button class="btn" id="rShare">${RR.icon('copy')}Share ETA</button><button class="btn" id="rSite">${RR.icon('pin')}Save destination</button></div>`;
+    const ageHtml = `<div class="dataage" id="routeAge" style="margin:0"><i></i><span>Checking Main Roads data…</span></div>`;
+    const btnsHtml = `<div class="rbtns" style="margin:4px 0 10px"><button class="btn" id="rShare">${RR.icon('copy')}Share ETA</button><button class="btn" id="rSite">${RR.icon('pin')}Save destination</button></div>`;
     const destPt = app.RUN.pts[app.RUN.pts.length - 1], site = RR.shared.siteNear(destPt, 400);
-    if (site) h += `<div class="card" style="border-color:rgba(54,165,245,.45)"><h3>${RR.icon('pin')} Site notes: ${esc(site.name)}</h3><p style="margin:0;white-space:pre-wrap">${esc(site.notes || 'No notes yet.')}</p><div class="hint">Shared by RigRoute testers. Updated ${new Date(site.updated).toLocaleDateString('en-AU')}.</div></div>`;
-    if (tc.issues.length) h += `<div class="card" style="border-color:rgba(255,176,32,.5)"><h3>${RR.icon('alert')} Timing for this departure</h3><ul class="alist">${tc.issues.map(i => `<li><span class="ico amber">${RR.icon('alert')}</span><span class="tx"><b>${esc(i.title)}</b><small>${esc(i.text)}</small></span></li>`).join('')}</ul></div>`;
-    h += `<div id="routeFuel"></div>`;
-    if (app.PERMIT) { const pc = RR.trip.permitCheck(r, app.PERMIT, app.LEAVE || new Date(), tc.arrive); h += `<div class="card" style="border-color:${pc.ok ? 'rgba(183,242,61,.4)' : 'rgba(240,68,68,.5)'}"><h3>${RR.icon(pc.ok ? 'check' : 'alert')} Permit: ${esc(app.PERMIT.name)}${app.PERMIT.number ? ' (' + esc(app.PERMIT.number) + ')' : ''}</h3><ul class="alist">${pc.items.map(i => `<li><span class="ico ${i.bad ? 'red' : 'lime'}">${RR.icon(i.bad ? 'alert' : 'check')}</span><span class="tx"><small style="color:var(--text);font-size:13.5px">${esc(i.text)}</small></span></li>`).join('')}</ul>${app.PERMIT.fileName ? `<button class="btn block" id="rPermitFile">${RR.icon('copy')}Open permit document</button>` : ''}</div>`; }
-    h += permitHtml(prof);
+    const siteHtml = !site ? '' : `<div class="card" style="border-color:rgba(54,165,245,.45)"><h3>${RR.icon('pin')} Site notes: ${esc(site.name)}</h3><p style="margin:0;white-space:pre-wrap">${esc(site.notes || 'No notes yet.')}</p><div class="hint">Shared by RigRoute testers. Updated ${new Date(site.updated).toLocaleDateString('en-AU')}.</div></div>`;
+    const timingHtml = !tc.issues.length ? '' : `<div class="card" style="border-color:rgba(255,176,32,.5)"><h3>${RR.icon('alert')} Timing for this departure</h3><ul class="alist">${tc.issues.map(i => `<li><span class="ico amber">${RR.icon('alert')}</span><span class="tx"><b>${esc(i.title)}</b><small>${esc(i.text)}</small></span></li>`).join('')}</ul></div>`;
+    let pc = null, savedPermitHtml = ''; if (app.PERMIT) { pc = RR.trip.permitCheck(r, app.PERMIT, app.LEAVE || new Date(), tc.arrive); savedPermitHtml = `<div class="card" style="border-color:${pc.ok ? 'rgba(183,242,61,.4)' : 'rgba(240,68,68,.5)'}"><h3>${RR.icon(pc.ok ? 'check' : 'alert')} Permit: ${esc(app.PERMIT.name)}${app.PERMIT.number ? ' (' + esc(app.PERMIT.number) + ')' : ''}</h3><ul class="alist">${pc.items.map(i => `<li><span class="ico ${i.bad ? 'red' : 'lime'}">${RR.icon(i.bad ? 'alert' : 'check')}</span><span class="tx"><small style="color:var(--text);font-size:13.5px">${esc(i.text)}</small></span></li>`).join('')}</ul>${app.PERMIT.fileName ? `<button class="btn block" id="rPermitFile">${RR.icon('copy')}Open permit document</button>` : ''}</div>`; }
     // access basis
     const basis = p.level === 'permit' ? ['red', 'Permit-dependent access', 'This trip is only legal under the permit noted above, on the route it specifies.'] : S.data.general ? ['lime', 'General access roads', 'Uses public roads open to general access vehicles, avoiding the Network 1 prohibited list.'] : ['lime', `Confirmed on ${RR.net(prof.net).short}`, `Every section is on the Main Roads ${RR.net(prof.net).label} (with conditions where marked).`];
     const items = [[basis[0], 'check', basis[1], basis[2]]];
     if (r.swap) items.unshift(['blue', 'truck', `Drop trailers at ${r.swap.name}`, `This combination can't reach the destination on its network. Drive to the assembly area, then continue as ${r.swap.to} on ${RR.net(r.swap.net2).short}.`]);
     r.conf.gaps.forEach(g => items.push(['red', 'block', `${fmtKm(g.d)} off the approved network`, 'The run in or out isn\'t verified for this vehicle. It needs road-owner approval or a different vehicle.']));
-    (res.restr.notes || []).filter(n => n.kind !== 'zone' || res.routes.some(x => x.metro)).forEach(n => items.push([n.kind === 'closure' ? 'red' : 'blue', { height: 'height', zone: 'wide', fwy: 'road', prohibited: 'block', dg: 'alert', closure: 'block' }[n.kind] || 'alert', { height: 'Low structures avoided', zone: 'Central Zones avoided', fwy: 'Freeways avoided', prohibited: 'Prohibited roads avoided', dg: 'Dangerous goods route', closure: 'Live closures avoided' }[n.kind] || 'Restriction', n.text]));
+    (res.restr.notes || []).filter(n => n.kind !== 'zone' || res.routes.some(x => x.metro)).forEach(n => items.push(['blue', { height: 'height', zone: 'wide', fwy: 'road', prohibited: 'block', dg: 'alert', closure: 'block', bridge: 'bridge' }[n.kind] || 'alert', { height: 'Low structures avoided', zone: 'Central Zones avoided', fwy: 'Freeways avoided', prohibited: 'Prohibited roads avoided', dg: 'Dangerous goods route', closure: 'Live closures avoided', bridge: 'Restricted bridges avoided' }[n.kind] || 'Restriction', n.text]));
+    (r.bridgesNear || []).forEach(b => { const rule = RR.routing.bridgeRule(b, RR.vehicles.dims(prof).mass); if (rule) items.push(['red', 'bridge', `Restricted bridge on this route: ${(b.props || {}).ROAD_NAME || ''}`, `Main Roads: "${rule.text}" Do not cross it. Pick another route or tell us with the feedback link.`]); });
+    if (S.data.general) items.push(['blue', 'weight', 'Bridge load limits not checked', 'Main Roads doesn\'t publish bridge load limits for general access roads. Obey posted load limit signs.']);
     r.tight.forEach(t => items.push(['amber', 'bridge', `Tight clearance: ${t.maxH.toFixed(2)} m`, `${t.descr} over ${t.road}${t.suburb ? ', ' + t.suburb : ''}. Within 0.5 m of what your load needs.`]));
     if (r.zones.length) items.push(['amber', 'wide', `Enters the ${r.zones.join(' and ')}`, 'Oversize vehicles have extra pilot, escort and convoy rules here.']);
     if (r.metro && (prof.width > 2.7 || prof.length > 22)) items.push(['amber', 'alert', 'Perth metro peak-hour curfew', 'Over 22 m long or 2.7 m wide: check your permit for 7:30–9:00 am and 4:30–6:00 pm limits.']);
-    h += `<div class="card"><h3>Access and restrictions</h3><ul class="alist">${items.map(([t, ic, a, b]) => `<li><span class="ico ${t}">${RR.icon(ic)}</span><span class="tx"><b>${esc(a)}</b><small>${esc(b)}</small></span></li>`).join('')}</ul></div>`;
+    const accessHtml = `<ul class="alist">${items.map(([t, ic, a, b]) => `<li><span class="ico ${t}">${RR.icon(ic)}</span><span class="tx"><b>${esc(a)}</b><small>${esc(b)}</small></span></li>`).join('')}</ul>`;
     // live alerts along route
-    h += `<div id="routeWx"></div>`;
+    // ---- trip check summary, with the detail folded away underneath ----
     const onRoute = routeAlerts(r);
-    if (onRoute.length) h += `<details class="sec" open><summary>${RR.icon('alert')} Alerts on this route <span class="count">${onRoute.length}</span><span class="tag live" style="margin-left:6px">Live</span></summary><div class="in"><ul class="alist">${onRoute.map((a, k) => `<li data-al="${k}"><span class="ico ${a.tone}">${RR.icon(a.icon || (RR.alerts.CATS.find(c => c.key === a.cat) || {}).icon || 'alert')}</span><span class="tx"><b>${esc(a.title)}</b><small>${esc(a.status || a.type)}${a.impact && a.impact !== a.status ? ' · ' + esc(a.impact) : ''}</small>${a.cat === 'report' ? `<small style="color:var(--dim)">${esc(a.source)}</small>` : ''}</span><span class="km">${fmtKm(a.along)}</span></li>`).join('')}</ul></div></details>`;
+    const sec = (id, icon, title, inner, open) => `<details class="sec" id="${id}" ${open ? 'open' : ''}><summary>${RR.icon(icon)} ${title}</summary><div class="in">${inner}</div></details>`;
+    const accessBad = items.filter(i => i[0] === 'red' || i[0] === 'amber');
+    const accessTone = accessBad.some(i => i[0] === 'red') ? 'red' : accessBad.length ? 'amber' : 'lime';
+    const permitTone = app.PERMIT ? (pc.ok ? 'lime' : 'red') : p.level === 'permit' ? 'amber' : 'lime';
+    const checks = [
+      ['secAccess', accessTone, 'Access', accessBad.length ? accessBad.slice(0, 2).map(i => i[2]).join(' · ') + (accessBad.length > 2 ? ` +${accessBad.length - 2} more` : '') : basis[1]],
+      ['secAccess', permitTone, 'Permit', app.PERMIT ? (pc.ok ? `${app.PERMIT.name}: fits this route` : `${app.PERMIT.name}: ${pc.items.filter(i => i.bad).length} problem${pc.items.filter(i => i.bad).length > 1 ? 's' : ''}`) : p.title],
+      ['secTiming', tc.issues.length ? 'amber' : 'lime', 'Timing', tc.issues.length ? tc.issues[0].title + (tc.issues.length > 1 ? ` +${tc.issues.length - 1} more` : '') : 'No curfew or time limit at this departure'],
+      ['secFuel', 'grey', 'Fuel', 'Checking…'],
+      ['secWx', 'grey', 'Weather', 'Checking…'],
+      ['secAlerts', onRoute.some(x => x.tone === 'red') ? 'red' : onRoute.length ? 'amber' : 'lime', 'Alerts', onRoute.length ? `${onRoute.length} on this route` : 'None on this route']
+    ];
+    if (site) checks.push(['secSite', 'blue', 'Site', `Notes for ${site.name}`]);
+    h += `<div class="card tcheck" id="tripCheck"><h3>Trip check</h3>${checks.map(([id, tone, label, text]) => `<button class="tc ${tone}" data-sec="${id}" data-k="${label}"><i></i><b>${label}</b><span>${esc(text)}</span>${RR.icon('back')}</button>`).join('')}</div>`;
+    h += sec('secAccess', 'check', 'Access and permit', savedPermitHtml + permitHtml(prof) + accessHtml + legendHtml + ageHtml, accessTone === 'red' || permitTone === 'red');
+    if (timingHtml) h += sec('secTiming', 'alert', 'Timing', timingHtml, false);
+    h += `<details class="sec" id="secFuel" hidden><summary>${RR.icon('fuel')} Fuel plan</summary><div class="in" id="routeFuel"></div></details>`;
+    h += `<details class="sec" id="secWx" hidden><summary>${RR.icon('water')} Weather on the way</summary><div class="in" id="routeWx"></div></details>`;
+    if (site) h += sec('secSite', 'pin', 'Site notes', siteHtml, false);
+    if (onRoute.length) h += `<details class="sec" id="secAlerts" ${onRoute.some(x => x.tone === 'red') ? 'open' : ''}><summary>${RR.icon('alert')} Alerts on this route <span class="count">${onRoute.length}</span><span class="tag live" style="margin-left:6px">Live</span></summary><div class="in"><ul class="alist">${onRoute.map((a, k) => `<li data-al="${k}"><span class="ico ${a.tone}">${RR.icon(a.icon || (RR.alerts.CATS.find(c => c.key === a.cat) || {}).icon || 'alert')}</span><span class="tx"><b>${esc(a.title)}</b><small>${esc(a.status || a.type)}${a.impact && a.impact !== a.status ? ' · ' + esc(a.impact) : ''}</small>${a.cat === 'report' ? `<small style="color:var(--dim)">${esc(a.source)}</small>` : ''}</span><span class="km">${fmtKm(a.along)}</span></li>`).join('')}</ul></div></details>`;
     // fuel and rest along route
     const fac = r.along.facilities.filter(f => f.kind !== 'rest' || f.tags.includes('toilets'));
     if (fac.length) h += `<details class="sec"><summary>${RR.icon('fuel')} Fuel, rest and parking on the way <span class="count">${fac.length}</span></summary><div class="in"><ul class="alist">${fac.slice(0, 40).map((f, k) => `<li data-fa="${k}"><span class="ico lime">${RR.icon(RR.facIcon(f))}</span><span class="tx"><b>${esc(f.name)}</b><small>${esc({ rtaa: 'Road train assembly area', hvrest: 'Heavy vehicle rest area', rest: 'Rest area', roadhouse: 'Roadhouse' }[f.kind] || '')}${tagTxt(f, ['rest', 'parking', 'roadhouse'])}</small></span><span class="km">${fmtKm(f.along)}</span></li>`).join('')}</ul><div class="hint">Main Roads WA rest areas, roadhouses and assembly areas within 3 km of the route. Truck Stops has diesel and services.</div></div></details>`;
@@ -258,10 +277,12 @@
     h += `<details class="sec"><summary>${RR.icon('route')} Turn-by-turn <span class="count">${r.steps.length}</span><button class="iconbtn" id="copyDir" style="margin-left:auto;width:34px;height:34px" aria-label="Copy directions">${RR.icon('copy')}</button></summary><div class="in"><ul class="steps">${r.steps.map((s, k) => `<li data-st="${k}"><span class="ar">${ARROW(s.instr)}</span><span>${esc(s.instr)} <b>${esc(s.name)}</b></span><span class="km">${fmtKm(s.len)}</span></li>`).join('')}<li><span class="ar">⚑</span><span>Arrive</span><span></span></li></ul></div></details>`;
     if (r.conditions.length) h += `<details class="sec"><summary>${RR.icon('alert')} Road conditions <span class="count">${r.conditions.length}</span></summary><div class="in">${r.conditions.sort((a, b) => b.notThrough - a.notThrough).map((c, k) => `<div class="cond ${c.notThrough ? 'hard' : ''}" data-cd="${k}"><b>${esc(c.road)}</b>${esc(c.text)}</div>`).join('')}</div></details>`;
     if (r.rulesNear.length) h += `<details class="sec"><summary>${RR.icon('route')} Intersection restrictions <span class="count">${r.rulesNear.length}</span></summary><div class="in">${r.rulesNear.map((x, k) => `<div class="cond" data-rn="${k}"><b>${esc(x.where || 'Intersection')}</b>${esc(x.text)}${x.parsed ? '' : ' (check manually)'}</div>`).join('')}</div></details>`;
+    h += btnsHtml;
     h += `<button class="link" id="routeFb" style="display:block;margin:0 0 6px">Something wrong with this route? Tell us</button>`;
     h += `<div class="hint" style="margin-bottom:8px">Times are planning estimates. Routes use Main Roads WA data loaded live; always follow signs and your notice or permit.</div>`;
     const body = $('routeBody'); body.innerHTML = h; body.scrollTop = 0;
     body.querySelectorAll('[data-r]').forEach(el => el.onclick = () => showRoute(+el.dataset.r));
+    body.querySelectorAll('.tc').forEach(b => b.onclick = () => { const d = $(b.dataset.sec); if (!d || d.hidden) return; d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
     const fly = (pt, z = 14) => RR.map.get().setView([pt[1], pt[0]], z);
     body.querySelectorAll('[data-st]').forEach(el => el.onclick = () => fly(r.steps[+el.dataset.st].at));
     body.querySelectorAll('[data-al]').forEach(el => el.onclick = () => { const a = onRoute[+el.dataset.al]; fly(a.at, 13); if (a.cat === 'report') reportPopup(a); });
@@ -293,7 +314,7 @@
         } return nr; },
       drawRoute: nr => RR.map.drawRoutes([nr], 0)
     }, demo);
-    NAV.setMuted(!$('setVoice').checked); RR.emit('drivestate');
+    NAV.setMuted(!$('setVoice').checked); RR.emit('drivestate'); $('nCentre').hidden = true;
     setTimeout(() => RR.map.get().invalidateSize(), 50);
     if (ok && !demo) toast('Driving mode on. Keep the screen open.');
   }
@@ -307,7 +328,9 @@
   $('nStop').onclick = () => {
     if (RR.shared.activeShare()) { const r = app.RES && app.RES.routes[app.sel]; const near = navPos && r && RAV.hav(navPos, r.line[r.line.length - 1]) < 400; RR.shared.stopShare(near ? 'arrived' : 'ended'); }
     setTimeout(paintFatChip, 50); NAV.stop(); RR.emit('drivestate'); $('closureBar').classList.remove('on'); if (app.pendingData) { app.pendingData = false; setTimeout(() => { loadNetwork(); toast('Main Roads data updated. Plan again to use the latest network.', 5000); }, 300); } setTimeout(() => { RR.map.get().invalidateSize(); showRoute(app.sel, true); }, 60); };
-  $('nCentre').onclick = () => { follow = true; };
+  const setFollow = v => { follow = v; $('nCentre').hidden = v || !NAV.isActive(); };
+  $('nCentre').onclick = () => setFollow(true);
+  setTimeout(() => RR.map.get().on('dragstart', () => NAV.isActive() && setFollow(false)), 0);
   let muted = false; $('nMute').onclick = () => { muted = !muted; NAV.setMuted(muted); $('nMute').textContent = muted ? '🔇' : '🔊'; };
 
   // ---------- alerts ----------
@@ -575,7 +598,7 @@
     const want = asCat; asItems = await findAhead(asCat); if (want !== asCat) return;
     $('asList').innerHTML = asItems.length ? asItems.map((f, k) => `<li data-k="${k}"><span class="ico lime">${RR.icon(RR.facIcon(f.src === 'g' ? { cat: asCat === 'diesel' ? 'diesel' : 'food' } : f))}</span><span class="tx"><b>${esc(f.name)}</b><small>${fmtKm(f.ahead)} ahead · ${f.off < 150 ? 'on your route' : fmtKm(f.off) + ' off route'}</small><small style="color:var(--dim)">${esc(f.source || '')}</small></span><button class="btn primary add" data-add="${k}">Add</button></li>`).join('') : '<li><span class="tx"><b>Nothing found ahead</b><small>Try another type, or search for a place below.</small></span></li>';
     $('asList').querySelectorAll('[data-add]').forEach(b => b.onclick = e => { e.stopPropagation(); insertStop(asItems[+b.dataset.add]); });
-    $('asList').querySelectorAll('[data-k]').forEach(li => li.onclick = () => { const f = asItems[+li.dataset.k]; RR.map.get().setView([f.at[1], f.at[0]], 14); follow = false; });
+    $('asList').querySelectorAll('[data-k]').forEach(li => li.onclick = () => { const f = asItems[+li.dataset.k]; RR.map.get().setView([f.at[1], f.at[0]], 14); setFollow(false); });
   }
   $('nAddStop').onclick = () => openAddStop();
   $('asGo').onclick = async () => { const q = $('asQ').value.trim(); if (!q) return; const res = await RR.geocode(q).catch(() => []); if (!res[0]) return toast('No match for that place.'); insertStop({ name: res[0].label, at: [res[0].lon, res[0].lat] }); };
@@ -817,9 +840,10 @@
   }
   $('pFuel').addEventListener('input', paintTripInputs);
   RR.on('profiles', paintTripInputs); RR.on('permits', paintTripInputs);
+  function setCheck(label, tone, text) { const b = document.querySelector(`#tripCheck [data-k="${label}"]`); if (!b) return; b.className = 'tc ' + tone; b.querySelector('span').textContent = text; }
   async function paintFuel(r) {
     const v = app.PROF || RR.vehicles.active(); const el = $('routeFuel'); if (!el) return;
-    if (!v.tankL || !v.useL) { el.innerHTML = ''; return; }
+    if (!v.tankL || !v.useL) { el.innerHTML = ''; setCheck('Fuel', 'grey', 'Add tank size and fuel use to the vehicle to check range'); return; }
     const mr = (r.along.facilities || []).filter(f => f.kind === 'roadhouse' || f.tags.includes('diesel')).map(f => ({ name: placeName(f), along: f.along, at: f.at, source: 'Main Roads' }));
     const draw = (stops, note) => {
       const fp = RR.trip.fuelPlan(r, v, app.FUEL || 100, stops); if (!fp || !$('routeFuel')) return;
@@ -832,6 +856,7 @@
       if (!fp.longestOk) body += `<p class="hint" style="color:var(--amber)">Longest stretch without known diesel: ${km(fp.longest.km)}, more than a full tank's range.</p>`;
       body += `<div class="hint">${note}</div>`;
       $('routeFuel').innerHTML = `<div class="card" style="border-color:${bad ? 'rgba(240,68,68,.5)' : 'var(--line)'}"><h3>${RR.icon('fuel')} Fuel</h3>${body}</div>`;
+      $('secFuel').hidden = false; setCheck('Fuel', bad ? 'red' : fp.fills.length ? 'blue' : 'lime', bad ? 'Not enough fuel to reach the next diesel' : fp.fills.length ? `Fill up at ${fp.fills[0].name.slice(0, 40)} (${km(fp.fills[0].km)})${fp.fills.length > 1 ? ` +${fp.fills.length - 1} more` : ''}` : `No stop needed, arrive with about ${Math.round(fp.arriveL)} L`);
       $('routeFuel').querySelectorAll('[data-fill]').forEach(li => li.onclick = () => { const f = fp.fills[+li.dataset.fill]; RR.map.get().setView([f.at[1], f.at[0]], 13); });
     };
     draw(mr, 'Diesel from Main Roads roadhouse data. Checking Google listings too…');
@@ -848,8 +873,9 @@
     try {
       if (!wxCache.has(key)) wxCache.set(key, RR.trip.weather(r, app.LEAVE || new Date()));
       const wx = await wxCache.get(key); if (!$('routeWx')) return;
+      $('secWx').hidden = !wx.issues.length; setCheck('Weather', wx.issues.length ? 'amber' : 'lime', wx.issues.length ? wx.issues.map(i => i.title).join(' · ') : 'Nothing severe forecast');
       $('routeWx').innerHTML = wx.issues.length ? `<div class="card" style="border-color:rgba(54,165,245,.5)"><h3>${RR.icon('alert')} Weather on the way</h3><ul class="alist">${wx.issues.map(i => `<li><span class="ico ${i.kind === 'heat' ? 'red' : 'blue'}">${RR.icon(i.kind === 'rain' ? 'water' : i.kind === 'heat' ? 'fire' : 'alert')}</span><span class="tx"><b>${esc(i.title)}</b><small>${esc(i.text)}</small></span><span class="km">${fmtKm(i.along)}</span></li>`).join('')}</ul><div class="hint">Forecast from Open-Meteo for when you'd be at each point. Not official warnings: check the <a href="https://www.bom.gov.au/wa/warnings/" target="_blank" rel="noopener">Bureau of Meteorology</a>.</div></div>` : `<div class="dataage"><i></i><span>Weather forecast along the route: nothing severe (wind, heat, heavy rain).</span></div>`;
-    } catch { wxCache.delete(key); if ($('routeWx')) $('routeWx').innerHTML = ''; }
+    } catch { wxCache.delete(key); if ($('routeWx')) $('routeWx').innerHTML = ''; setCheck('Weather', 'grey', 'Forecast unavailable right now'); }
   }
 
   // ---------- share ETA ----------
