@@ -407,8 +407,9 @@
     $('stopScope').innerHTML = [['route', 'Along my route', !r], ['near', 'Near me / map']].map(([k, l, dis]) => `<button class="chip ${app.stopScope === k ? 'on' : ''}" data-sc="${k}" ${dis ? 'disabled style="opacity:.4"' : ''}>${l}</button>`).join('');
     $('stopCats').innerHTML = FAC.map(c => `<button class="chip ${app.stopCat === c.key ? 'on' : ''}" data-cat="${c.key}">${RR.icon(c.icon)}${c.label}</button>`).join('');
     $('stopScope').querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { app.stopScope = b.dataset.sc; renderStops(); });
-    $('stopCats').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { app.stopCat = b.dataset.cat; renderStops(); });
+    $('stopCats').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { app.stopCat = app.stopCat === b.dataset.cat ? null : b.dataset.cat; renderStops(); });
     const cat = FAC.find(c => c.key === app.stopCat);
+    if (!cat) { RR.map.setFacilities([], () => { }); $('stopList').innerHTML = '<li><span class="tx"><b>Nothing shown on the map</b><small>Tap a type above to show it. Tap it again to clear it from the map.</small></span></li>'; $('stopNote').textContent = ''; return; }
     const centre = app.ME && app.stopScope === 'near' ? [app.ME.lon, app.ME.lat] : (() => { const m = RR.map.get().getCenter(); return [m.lng, m.lat]; })();
     const along = r && app.stopScope === 'route' ? alongIdx(r) : null;
     const place = f => { if (along) { const d = along(f.at); return d == null ? null : { ...f, along: d }; } const d = RAV.hav(centre, f.at); return d < 150000 ? { ...f, dist: d } : null; };
