@@ -43,7 +43,9 @@
     if ((was === 'alerts') !== (name === 'alerts')) setTimeout(refreshAlertMarkers, 0);
   }
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => openSheet(null));
-  document.querySelectorAll('.tab').forEach(t => t.onclick = () => { const k = t.dataset.tab; if (k === 'map') return openSheet(null); if (k === 'plan') return openSheet(app.RES && !app.RES.error && app.sheet !== 'plan' ? 'route' : 'plan'); openSheet(k); });
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => { const k = t.dataset.tab; if (k === 'map') return openSheet(null);
+    // tapping the tab that's already open closes its panel
+    if (app.sheet && t.classList.contains('on')) return openSheet(null); if (k === 'plan') return openSheet(app.RES && !app.RES.error && app.sheet !== 'plan' ? 'route' : 'plan'); openSheet(k); });
   $('planBtn').onclick = () => openSheet(app.RES && !app.RES.error ? 'route' : 'plan');
   $('routeBack').onclick = () => openSheet('plan');
   $('fabAlerts').onclick = () => openSheet('alerts');
