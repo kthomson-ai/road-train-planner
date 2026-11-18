@@ -189,7 +189,7 @@ details.sec .in { padding: 0 14px 12px; }
 .splash { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: grid; place-items: center; transition: opacity .4s; }
 .splash.off { opacity: 0; pointer-events: none; }
 .splash .in { text-align: center; }
-.splash img { width: min(62vw, 300px); height: auto; filter: drop-shadow(0 12px 30px rgba(0,0,0,.45)); }
+.splash img { width: 112px; height: 112px; filter: drop-shadow(0 10px 22px rgba(0,0,0,.35)); }
 .splash h1 { font: 900 34px/1 var(--display); margin: 18px 0 6px; letter-spacing: -.02em; }
 .splash h1 span { color: var(--lime-text); }
 .splash p { color: var(--muted); margin: 0; }
