@@ -5,7 +5,10 @@ RR.map = (() => {
   const tone = { red: '#F04444', amber: '#FFB020', blue: '#36A5F5', lime: '#B7F23D', grey: '#9AA6B2' };
   function init() {
     map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([-26.5, 121.5], 5);
-    base.dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '© OpenStreetMap contributors © CARTO' }).addTo(map);
+    base.dark = L.layerGroup([
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, maxNativeZoom: 16, attribution: 'Esri, HERE, Garmin, © OpenStreetMap contributors' }),
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20, maxNativeZoom: 16 })
+    ]).addTo(map);
     ['net', 'zones', 'routes', 'alerts', 'facilities', 'wps', 'me'].forEach(k => L_[k] = L.layerGroup().addTo(map));
     L_.renderer = L.canvas({ padding: 0.4 });
     map.on('zoomend', () => RR.emit('zoom', map.getZoom()));
@@ -15,14 +18,15 @@ RR.map = (() => {
     if (!L.gridLayer || !L.gridLayer.googleMutant || !window.google) return false;
     base.google = L.gridLayer.googleMutant({ type: 'roadmap', maxZoom: 20, styles: DARK_STYLE });
     base.sat = L.gridLayer.googleMutant({ type: 'hybrid', maxZoom: 20 });
+    if (baseKey === 'dark') { map.removeLayer(base.dark); base.google.addTo(map); baseKey = 'google'; }
     return true;
   }
   const DARK_STYLE = [{ elementType: 'geometry', stylers: [{ color: '#151b21' }] }, { elementType: 'labels.text.fill', stylers: [{ color: '#9aa6b2' }] }, { elementType: 'labels.text.stroke', stylers: [{ color: '#101418' }] }, { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a333d' }] }, { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3b4652' }] }, { featureType: 'water', stylers: [{ color: '#0b1a26' }] }, { featureType: 'poi', stylers: [{ visibility: 'off' }] }, { featureType: 'transit', stylers: [{ visibility: 'off' }] }];
   function cycleBase() {
     const order = ['dark', ...(base.google ? ['google', 'sat'] : [])];
     const next = order[(order.indexOf(baseKey) + 1) % order.length];
-    map.removeLayer(base[baseKey]); base[next].addTo(map); base[next].bringToBack && base[next].bringToBack(); baseKey = next;
-    return { dark: 'Dark map', google: 'Google map (dark)', sat: 'Satellite' }[next];
+    map.removeLayer(base[baseKey]); base[next].addTo(map); base[next].bringToBack && base[next].bringToBack(); if (base[next].eachLayer) base[next].eachLayer(l => l.bringToBack && l.bringToBack()); baseKey = next;
+    return { dark: 'Dark map (Esri)', google: 'Google map (dark)', sat: 'Satellite' }[next];
   }
   // ---- approved network ----
   function drawNetwork(data, show) {

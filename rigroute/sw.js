@@ -1,6 +1,6 @@
 // RigRoute service worker: network-first for the app shell, so updates arrive straight away
 // and the last version still opens without signal. Live data is never cached here.
-const CACHE = 'rigroute-shell-v1';
+const CACHE = 'rigroute-shell-v2';
 const SHELL = ['./', 'index.html', 'css/rigroute.css', 'js/core.js', 'js/nav.js', 'js/services/config.js', 'js/services/store.js', 'js/services/mainroads.js', 'js/services/google.js', 'js/services/vehicles.js', 'js/services/routing.js', 'js/services/alerts.js', 'js/ui/icons.js', 'js/ui/map.js', 'js/ui/app.js', 'img/icon-192.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
