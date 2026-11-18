@@ -13,8 +13,8 @@
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="css/rigroute.css?v=6">
+<link rel="stylesheet" href="js/vendor/leaflet.css">
+<link rel="stylesheet" href="css/rigroute.css?v=7">
 </head>
 <body>
 <div class="splash" id="splash"><div class="in"><img src="img/icon-192.png" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
@@ -170,6 +170,7 @@
       <div class="field" style="margin-top:14px"><label>Appearance</label><div class="seg" id="themeSeg2"><button data-theme="auto">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div></div>
       <label class="toggle"><span><b>Show approved network</b><small>For the selected vehicle</small></span><span class="switch"><input type="checkbox" id="setNet" checked><i></i></span></label>
       <div class="toggle" style="cursor:default"><span><b>Map data</b><small id="dataInfo">Loading…</small></span><button class="btn" id="refresh" style="height:40px">Refresh</button></div>
+      <div class="hint" id="offlineInfo" style="margin:8px 0 0"></div>
       <button class="btn block" id="fbOpen" style="margin-top:8px"><span data-icon="report"></span>Send feedback to the RigRoute team</button>
     </div>
     <div class="card"><h3>About</h3><div style="font-size:13px;color:var(--muted)">
@@ -221,23 +222,25 @@
 <div id="closureBar"><span class="ci" data-icon="block"></span><div class="ct"><b id="cbTitle">Road closed ahead</b><small id="cbSub"></small></div><button class="btn primary" id="cbReroute">Reroute</button><button class="iconbtn" id="cbDismiss" aria-label="Dismiss"><span data-icon="x"></span></button></div>
 <div id="drvFabs"><button id="nAddStop" aria-label="Add a stop"><span data-icon="plus"></span>Stop</button><button id="nVoice" aria-label="Voice command"><span data-icon="mic"></span></button></div>
 <div id="listening"><div class="lw"><span data-icon="mic"></span></div><b id="lsText">Listening…</b><small id="lsHint">Say "report crash", "cattle on road", "find diesel" or "toilet stop"</small></div>
+<div id="netpill" hidden><span data-icon="alert"></span><span id="netText">No signal: navigation still works</span></div>
 <div class="toast" id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.16.0/dist/Leaflet.GoogleMutant.js"></script>
-<script src="js/core.js?v=6"></script>
-<script src="js/nav.js?v=6"></script>
-<script src="js/services/config.js?v=6"></script>
-<script src="js/services/store.js?v=6"></script>
-<script src="js/services/mainroads.js?v=6"></script>
-<script src="js/services/google.js?v=6"></script>
-<script src="js/services/vehicles.js?v=6"></script>
-<script src="js/services/routing.js?v=6"></script>
-<script src="js/services/alerts.js?v=6"></script>
-<script src="js/services/reports.js?v=6"></script>
-<script src="js/ui/icons.js?v=6"></script>
-<script src="js/ui/theme.js?v=6"></script>
-<script src="js/ui/map.js?v=6"></script>
-<script src="js/ui/app.js?v=6"></script>
+<script src="js/vendor/leaflet.js"></script>
+<script src="js/vendor/Leaflet.GoogleMutant.js"></script>
+<script src="js/core.js?v=7"></script>
+<script src="js/nav.js?v=7"></script>
+<script src="js/services/config.js?v=7"></script>
+<script src="js/services/store.js?v=7"></script>
+<script src="js/services/mainroads.js?v=7"></script>
+<script src="js/services/google.js?v=7"></script>
+<script src="js/services/vehicles.js?v=7"></script>
+<script src="js/services/routing.js?v=7"></script>
+<script src="js/services/places.js?v=7"></script>
+<script src="js/services/alerts.js?v=7"></script>
+<script src="js/services/reports.js?v=7"></script>
+<script src="js/ui/icons.js?v=7"></script>
+<script src="js/ui/theme.js?v=7"></script>
+<script src="js/ui/map.js?v=7"></script>
+<script src="js/ui/app.js?v=7"></script>
 </body>
 </html>

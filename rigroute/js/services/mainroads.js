@@ -59,6 +59,7 @@ RR.mainroads = (() => {
   const LOCAL = new Map();
   async function localRoads(p) {
     const k = p[0].toFixed(3) + ',' + p[1].toFixed(3); if (LOCAL.has(k)) return LOCAL.get(k);
+    const saved = await RR.store.cacheGet('lr-' + k); if (saved && Date.now() - saved.t < 30 * DAY) { LOCAL.set(k, saved.v); return saved.v; }
     let feats = [];
     for (const km of [6, 3, 1.5]) {
       const env = envelope(p, km);
@@ -66,9 +67,23 @@ RR.mainroads = (() => {
       if (cnt <= 7000 || km === 1.5) { feats = (await fetchLayer(E.assets, 17, 'ROAD,ROAD_NAME,NETWORK_TYPE', { extra: env }).catch(() => [])).filter(truckRoad); break; }
     }
     feats.forEach(f => { f.properties._cond = false; f.properties.ROAD_HIERARCHY = 'Access Road'; });
-    LOCAL.set(k, feats); return feats;
+    LOCAL.set(k, feats); if (feats.length) RR.store.cachePut('lr-' + k, { t: Date.now(), v: feats }); return feats;
   }
 
+  // ---- WA towns and localities (Landgate, via SLIP) for offline place search and offline map labels ----
+  const SLIP = 'https://public-services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Boundaries/MapServer/';
+  async function localities() {
+    return RR.store.fresh('loc1', { checkEvery: 7 * DAY, maxAge: 90 * DAY, sig: () => layerSig(SLIP, [16]), loader: async () => {
+      const j = await fetch(`${SLIP}16/query?where=1%3D1&outFields=name,postcode,land_area&returnGeometry=true&maxAllowableOffset=0.02&geometryPrecision=4&outSR=4326&f=geojson&resultRecordCount=5000`).then(r => r.json());
+      const tc = s => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\bMc(\w)/g, (m, c) => 'Mc' + c.toUpperCase());
+      return (j.features || []).filter(f => f.geometry && f.properties.name).map(f => {
+        const ring = f.geometry.type === 'Polygon' ? f.geometry.coordinates[0] : f.geometry.coordinates.reduce((a, p) => p[0].length > a.length ? p[0] : a, []);
+        let A = 0, x = 0, y = 0; for (let i = 0, n = ring.length - 1; i < n; i++) { const [x0, y0] = ring[i], [x1, y1] = ring[i + 1], c = x0 * y1 - x1 * y0; A += c; x += (x0 + x1) * c; y += (y0 + y1) * c; }
+        const at = A ? [+(x / (3 * A)).toFixed(4), +(y / (3 * A)).toFixed(4)] : ring[0];
+        return { name: tc(f.properties.name), pc: f.properties.postcode || '', area: +f.properties.land_area || 0, at };
+      });
+    } });
+  }
   // ---- low overpasses / rail bridges ----
   async function structures() {
     const f = await RR.store.fresh('structs1', { sig: () => layerSig(E.hvs, [781]), loader: () => fetchLayer(E.hvs, 781, 'ROAD_NAME,MAXIMUM_LOAD_HEIGHT,STR_DESCR,SUBURB,CROSSING_NAME') }).catch(() => []);
@@ -100,9 +115,9 @@ RR.mainroads = (() => {
   // ---- live alerts (Main Roads Travel Map data) ----
   async function liveAlerts() {
     const svc = [['WebEoc_RoadClosures', 4, 'closure'], ['WebEoc_RoadIncidents', 1, 'incident'], ['WebEoc_Roadworks', 2, 'roadworks'], ['WebEoc_Events', 0, 'event']];
-    const out = [];
+    const out = []; let failed = 0;
     await Promise.all(svc.map(async ([s, id, src]) => {
-      const f = await fetchLayer(`${E.webeoc}${s}/FeatureServer/`, id, '*').catch(() => []);
+      const f = await fetchLayer(`${E.webeoc}${s}/FeatureServer/`, id, '*').catch(() => { failed++; return []; });
       for (const x of f) {
         const p = x.properties || {}; if (!x.geometry) continue;
         const type = (p.IncidentTy || p.IncidentType || p.EventType || (src === 'roadworks' ? 'Roadworks' : src)).toString();
@@ -110,7 +125,8 @@ RR.mainroads = (() => {
         out.push({ id: src + (p.Id || p.FID), src, type, status, title: (p.Location || p.Road || type).toString().trim(), road: p.Road || p.LocalRoadName || '', impact: (p.TrafficImp || '').toString(), region: p.Region || '', updated: p.UpdateDate || p.EntryDate || '', url: p.SeeMoreUrl || '', geom: x.geometry, source: 'Main Roads WA (live)' });
       }
     }));
+    if (failed === svc.length) throw new Error('Main Roads live data unreachable');
     return out;
   }
-  return { fetchLayer, network, localRoads, structures, facilities, liveAlerts, truckRoad };
+  return { localities, fetchLayer, network, localRoads, structures, facilities, liveAlerts, truckRoad };
 })();

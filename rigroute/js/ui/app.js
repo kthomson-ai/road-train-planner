@@ -96,7 +96,7 @@
 
   // ---------- trip inputs ----------
   function setPoint(w, pt) {
-    app.P[w] = pt; const el = $(w); if (el) el.value = pt ? pt.label : '';
+    app.P[w] = pt; const el = $(w); if (el) el.value = pt ? pt.label : ''; if (pt) RR.places.remember(pt);
     paintWaypoints(); updateGo();
   }
   function paintWaypoints() {
@@ -267,12 +267,12 @@
       reroute: (pt, reached) => { const run = app.RUN; const stops = run.pts.slice(1, -1), labs = run.labels.slice(1, -1); const G = S.data.general ? S.local.g || S.base : S.base; const nr = RR.routing.reroute(G, [pt, ...stops.slice(reached), run.pts[run.pts.length - 1]], ['Current position', ...labs.slice(reached), run.labels[run.labels.length - 1]], reached + 1); if (nr && !nr.error) { app.RES.routes[app.sel] = Object.assign(nr, { conf: r.conf, along: r.along, tight: r.tight, zones: r.zones, label: r.label }); } return nr; },
       drawRoute: nr => RR.map.drawRoutes([nr], 0)
     }, demo);
-    NAV.setMuted(!$('setVoice').checked);
+    NAV.setMuted(!$('setVoice').checked); RR.emit('drivestate');
     setTimeout(() => RR.map.get().invalidateSize(), 50);
     if (ok && !demo) toast('Driving mode on. Keep the screen open.');
   }
   RR.map.get && 0;
-  $('nStop').onclick = () => { NAV.stop(); $('closureBar').classList.remove('on'); if (app.pendingData) { app.pendingData = false; setTimeout(() => { loadNetwork(); toast('Main Roads data updated. Plan again to use the latest network.', 5000); }, 300); } setTimeout(() => { RR.map.get().invalidateSize(); showRoute(app.sel, true); }, 60); };
+  $('nStop').onclick = () => { NAV.stop(); RR.emit('drivestate'); $('closureBar').classList.remove('on'); if (app.pendingData) { app.pendingData = false; setTimeout(() => { loadNetwork(); toast('Main Roads data updated. Plan again to use the latest network.', 5000); }, 300); } setTimeout(() => { RR.map.get().invalidateSize(); showRoute(app.sel, true); }, 60); };
   $('nCentre').onclick = () => { follow = true; };
   let muted = false; $('nMute').onclick = () => { muted = !muted; NAV.setMuted(muted); $('nMute').textContent = muted ? '🔇' : '🔊'; };
 
@@ -285,7 +285,9 @@
     if (c) return all.map(a => ({ ...a, dist: RAV.hav(c, a.at) })).filter(a => a.dist < 100000).sort((a, b) => a.dist - b.dist);
     return all.filter(a => a.cat === 'report' || (a.source && /live/.test(a.source))).concat(all.filter(a => !/live/.test(a.source || '') && ['lowbridge', 'oversize'].includes(a.cat)));
   }
-  function alongIdx(r) { const line = r.line, stride = Math.max(1, Math.floor(line.length / 1500)); const cum = [0]; for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + RAV.hav(line[i - 1], line[i])); return pt => { let best = 1e12, bi = 0; for (let i = 0; i < line.length; i += stride) { const d = RAV.hav(pt, line[i]); if (d < best) { best = d; bi = i; } } return best < 1500 ? cum[bi] : null; }; }
+  const alongMemo = new WeakMap();
+  function alongIdx(r) { if (alongMemo.has(r)) return alongMemo.get(r); const fn = alongIdx0(r); const cache = new Map(); const f = pt => { const k = pt[0].toFixed(5) + ',' + pt[1].toFixed(5); if (cache.has(k)) return cache.get(k); const v = fn(pt); cache.set(k, v); return v; }; alongMemo.set(r, f); return f; }
+  function alongIdx0(r) { const line = r.line, stride = Math.max(1, Math.floor(line.length / 1500)); const cum = [0]; for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + RAV.hav(line[i - 1], line[i])); return pt => { let best = 1e12, bi = 0; for (let i = 0; i < line.length; i += stride) { const d = RAV.hav(pt, line[i]); if (d < best) { best = d; bi = i; } } return best < 1500 ? cum[bi] : null; }; }
   function renderAlerts() {
     const hasRoute = app.RES && !app.RES.error;
     if (!hasRoute && app.alertScope === 'route') app.alertScope = 'near';
@@ -295,7 +297,7 @@
     $('alertCats').innerHTML = RR.alerts.CATS.map(c => `<button class="chip ${app.alertCat === c.key ? 'on' : ''}" data-cat="${c.key}">${c.label}<span class="n">${c.key === 'all' ? list.length : counts[c.key] || 0}</span></button>`).join('');
     const shown = list.filter(a => app.alertCat === 'all' || a.cat === app.alertCat).slice(0, 150);
     $('alertList').innerHTML = shown.length ? shown.map((a, k) => { const cat = RR.alerts.CATS.find(c => c.key === a.cat) || {}; cat.icon = a.icon || cat.icon; const dist = a.along != null ? fmtKm(a.along) : a.dist != null ? fmtKm(a.dist) : ''; return `<li data-k="${k}"><span class="ico ${a.tone}">${RR.icon(cat.icon || 'alert')}</span><span class="tx"><b>${esc(a.title)}</b><small>${esc(a.status || cat.label)}${a.impact && a.impact !== a.status ? ' · ' + esc(a.impact) : ''}</small><small style="color:var(--dim)">${esc(a.source || '')}${a.updated ? ' · updated ' + esc(a.updated) : ''}</small></span><span class="km">${dist}</span></li>`; }).join('') : `<li><span class="tx"><b>Nothing here right now</b><small>No ${app.alertCat === 'all' ? '' : (RR.alerts.CATS.find(c => c.key === app.alertCat) || {}).label.toLowerCase() + ' '}alerts ${app.alertScope === 'route' ? 'on your route' : app.alertScope === 'near' ? 'within 100 km' : 'in WA'}.</small></span></li>`;
-    $('alertNote').innerHTML = 'Closures, incidents, flooding and roadworks are live from the Main Roads WA Travel Map. Low bridges, height and weight limits come from Main Roads structure and network data for your vehicle. For bushfire and emergency warnings check <a href="https://www.emergency.wa.gov.au" target="_blank" rel="noopener">Emergency WA</a>.';
+    $('alertNote').innerHTML = (app.liveFailed && app.liveAt ? `<b>No signal:</b> showing alerts from ${when(app.liveAt)}. They'll refresh when signal returns.<br>` : '') + 'Closures, incidents, flooding and roadworks are live from the Main Roads WA Travel Map. Low bridges, height and weight limits come from Main Roads structure and network data for your vehicle. For bushfire and emergency warnings check <a href="https://www.emergency.wa.gov.au" target="_blank" rel="noopener">Emergency WA</a>.';
     $('alertScope').querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { app.alertScope = b.dataset.sc; renderAlerts(); });
     $('alertCats').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { app.alertCat = b.dataset.cat; renderAlerts(); });
     $('alertList').querySelectorAll('[data-k]').forEach(li => li.onclick = () => { const a = shown[+li.dataset.k]; RR.map.get().setView([a.at[1], a.at[0]], 13); if (window.innerWidth < 900) openSheet(null); if (a.cat === 'report') reportPopup(a); });
@@ -319,7 +321,7 @@
     $('livepill').innerHTML = pills.filter(p => p[3]).map(([k, c, t]) => `<span class="pill" data-p="${k}"><i style="background:var(--${c})"></i>${t}</span>`).join('');
     $('livepill').querySelectorAll('[data-p]').forEach(p => p.onclick = () => { app.alertCat = p.dataset.p; app.alertScope = 'wa'; openSheet('alerts'); });
   }
-  RR.on('zoom', () => refreshAlertMarkers());
+  let zBucket = null; RR.on('zoom', z => { const b = z < 8 ? 0 : z < 11 ? 1 : 2; if (b !== zBucket) { zBucket = b; refreshAlertMarkers(); } });
 
   // ---------- truck stops ----------
   const gCache = new Map();
@@ -394,7 +396,7 @@
     vs.sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name));
     const region = l => ({ 'en-AU': 'Australian', 'en-GB': 'British', 'en-US': 'American', 'en-NZ': 'New Zealand', 'en-IE': 'Irish', 'en-IN': 'Indian', 'en-ZA': 'South African' }[l.replace('_', '-')] || l);
     sel.disabled = false;
-    sel.innerHTML = '<option value="">Automatic (Australian if available)</option>' + vs.map(v => `<option value="${esc(v.voiceURI)}">${esc(v.name.replace(/^(Microsoft|Google)\s+/, ''))} · ${region(v.lang)}</option>`).join('');
+    sel.innerHTML = '<option value="">Automatic (Australian if available)</option>' + vs.map(v => `<option value="${esc(v.voiceURI)}">${esc(v.name.replace(/^(Microsoft|Google)\s+/, ''))} · ${region(v.lang)}${v.localService ? ' · works offline' : ''}</option>`).join('');
     sel.value = pref.uri || '';
     $('setRate').value = pref.rate || 1; $('setRateVal').textContent = (+$('setRate').value).toFixed(2).replace(/0$/, '') + '×';
   }
@@ -580,6 +582,7 @@
   function showListening(on, text, hint) { $('listening').classList.toggle('on', on); if (text) $('lsText').textContent = text; if (hint != null) $('lsHint').textContent = hint; }
   function voiceCommand(mode) {
     if (!VOICE.supported) return toast('Voice input isn\'t available in this browser. Chrome on Android supports it.');
+    if (!navigator.onLine) { NAV._say('Voice commands need mobile signal. Use the buttons for now.'); return toast('Voice commands need signal. Use the Report and + Stop buttons; reports will send when signal returns.', 6000); }
     try { speechSynthesis.cancel(); } catch { }
     showListening(true, 'Listening…', mode === 'report' ? 'Say what you see, e.g. "cattle on the road" or "police on the other side"' : 'Say "report crash", "cattle on road", "find diesel" or "toilet stop"');
     VOICE.listen(async text => {
@@ -707,8 +710,33 @@
   async function flushFeedback() { const q = RR.store.get('fbQueue', []); if (!q.length) return; const left = []; for (const f of q) { try { await RR.reports.feedback({ kind: f.kind, message: f.message, context: f.context, lon: f.context.position ? f.context.position[0] : f.context.map[0], lat: f.context.position ? f.context.position[1] : f.context.map[1] }); } catch { left.push(f); } } RR.store.set('fbQueue', left); }
   setInterval(flushFeedback, 120e3); setTimeout(flushFeedback, 8000);
 
+
+  // ---------- no mobile signal ----------
+  let offline = false;
+  function netState(ok) {
+    const now = ok == null ? navigator.onLine : ok && navigator.onLine;
+    if (offline === !now) return; offline = !now;
+    $('netpill').hidden = !offline;
+    paintNetText();
+    document.body.classList.toggle('offline-map', offline);
+    RR.map.showTowns(offline || RR.map.baseKey() === 'dark' && offline);
+    if (offline && S.data) RR.map.drawNetwork(S.data, true); else if (S.data) RR.map.drawNetwork(S.data, haz.network);
+    if (!offline) { loadReports(); flushFeedback(); }
+  }
+  function paintNetText() { $('netText').textContent = NAV.isActive() ? 'No signal: navigation still works' : 'No signal: routing and saved maps still work'; }
+  RR.on('drivestate', paintNetText);
+  addEventListener('online', () => { netState(true); loadLive(); });
+  addEventListener('offline', () => netState(false));
+  async function paintOfflineInfo() {
+    const v = RR.vehicles.active(), tick = (ok, t) => `${ok ? '✓' : '✗'} ${t}`;
+    const [n, st, lo] = await Promise.all([RR.store.info('net2-' + v.net), RR.store.info('structs1'), RR.store.info('loc1')]);
+    const places = RR.places.recents().length;
+    $('offlineInfo').innerHTML = `<b>Ready for no signal:</b> ${[tick(n, `${RR.net(v.net).short} roads`), tick(st, 'low bridges'), tick((S.facilities || []).length, 'rest areas & roadhouses'), tick(lo, `${RR.places.towns().length.toLocaleString()} WA towns`), `${places} saved places`].join(' · ')}. Live alerts, address search beyond these, Google listings and the background map need signal.`;
+  }
+
   // ---------- profiles ----------
   function renderProfiles() {
+    paintOfflineInfo();
     const act = RR.vehicles.active();
     $('vehList').innerHTML = RR.vehicles.all().map(v => `<div class="vcard ${v.id === act.id ? 'on' : ''}" data-id="${v.id}"><span class="radio"></span><span class="vi">${RR.icon('truck')}</span><span class="tx"><b>${esc(v.name)}</b><small>${esc(VT(v.type).label || '')} · ${esc(vehSummary(v))}${v.dg ? ' · DG' : ''}</small></span><button class="iconbtn" data-edit="${v.id}" aria-label="Edit">${RR.icon('edit')}</button></div>`).join('');
     $('vehList').querySelectorAll('.vcard').forEach(el => el.onclick = e => { if (e.target.closest('[data-edit]')) return; RR.vehicles.setActive(el.dataset.id); renderProfiles(); toast(`${RR.vehicles.active().name} selected`); });
@@ -739,7 +767,8 @@
 
   // ---------- live data ----------
   async function loadLive(force) {
-    try { S.alerts = await RR.mainroads.liveAlerts(); app.liveAt = new Date(); } catch { S.alerts = S.alerts || []; }
+    try { S.alerts = await RR.mainroads.liveAlerts(); app.liveAt = new Date(); app.liveFailed = false; RR.store.cachePut('live1', { t: Date.now(), v: S.alerts }); netState(true); }
+    catch { app.liveFailed = true; if (!S.alerts || !S.alerts.length) { const c = await RR.store.cacheGet('live1'); if (c && Date.now() - c.t < 3 * 864e5) { S.alerts = c.v; app.liveAt = new Date(c.t); } else S.alerts = S.alerts || []; } netState(false); }
     refreshAlertMarkers(); if (app.sheet === 'alerts') renderAlerts(); checkClosures(); paintDataInfo();
   }
 
@@ -753,11 +782,13 @@
     const net = loadNetwork();
     RR.mainroads.structures().then(s => { S.structures = s; refreshAlertMarkers(); });
     RR.mainroads.facilities().then(f => { S.facilities = f; });
+    RR.mainroads.localities().then(t => { RR.places.setTowns(t); RR.map.setTowns(t); }).catch(() => { });
+    setTimeout(() => netState(navigator.onLine), 1500);
     loadLive(); setInterval(loadLive, 5 * 60 * 1000); loadReports(); paintTheme();
     setTimeout(applyLayerToggles, 0);
     setTimeout(() => $('splash').classList.add('off'), 900);
     await net;
   }
   boot();
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === '127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(() => { });
 })();

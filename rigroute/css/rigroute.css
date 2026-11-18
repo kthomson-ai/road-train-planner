@@ -273,3 +273,10 @@ body.driving #closureBar.on { display: flex; align-items: center; gap: 10px; pos
 .dataage { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin: 0 0 12px; }
 .dataage i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; } .dataage.stale i { background: var(--amber); }
 body.driving #sheet-feedback { z-index: 61; bottom: 0; }
+#netpill { position: fixed; top: calc(118px + var(--safe-t)); left: 50%; transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 999px; background: #3a2a06; color: #ffd98a; border: 1px solid rgba(255,176,32,.5); font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: var(--shadow); }
+#netpill[hidden] { display: none; } #netpill svg.i { width: 16px; height: 16px; }
+[data-theme=light] #netpill { background: #fff4d6; color: #7a4b00; }
+body.driving #netpill { top: calc(104px + var(--safe-t)); }
+body.offline-map #map, body.offline-map .leaflet-container { background: var(--mapbg); }
+.townlbl { font: 700 12px/1 var(--font); color: var(--text); text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 6px var(--bg); white-space: nowrap; pointer-events: none; transform: translate(-50%, -50%); }
+.townlbl.big { font-size: 13.5px; font-weight: 800; }

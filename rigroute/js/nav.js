@@ -10,9 +10,9 @@ const NAV = (() => {
   let muted = false, voice = null;
   let prefURI = null, rate = 1;
   try { const v = JSON.parse(localStorage.getItem('rr.voicePref') || 'null'); if (v) { prefURI = v.uri || null; rate = +v.rate || 1; } } catch { }
-  function pickVoice() { try { const vs = speechSynthesis.getVoices(); voice = (prefURI && vs.find(v => v.voiceURI === prefURI)) || vs.find(v => /en-AU/i.test(v.lang)) || vs.find(v => /en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; } catch { } }
+  function pickVoice() { try { const all = speechSynthesis.getVoices(); const off = !navigator.onLine; const vs = off && all.some(v => v.localService && /^en/i.test(v.lang)) ? all.filter(v => v.localService) : all; voice = (prefURI && vs.find(v => v.voiceURI === prefURI)) || vs.find(v => /en-AU/i.test(v.lang)) || vs.find(v => /en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; } catch { } }
   function setVoice(uri, r) { prefURI = uri || null; if (r) rate = +r; try { localStorage.setItem('rr.voicePref', JSON.stringify({ uri: prefURI, rate })); } catch { } pickVoice(); }
-  try { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; } catch { }
+  try { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; addEventListener('online', pickVoice); addEventListener('offline', pickVoice); } catch { }
   const lc1 = t => t.charAt(0).toLowerCase() + t.slice(1);
   function say(text, urgent) {
     if (muted || !('speechSynthesis' in window)) return;

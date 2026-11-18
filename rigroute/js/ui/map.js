@@ -4,15 +4,16 @@ RR.map = (() => {
   const L_ = {};
   const tone = { red: '#F04444', amber: '#FFB020', blue: '#36A5F5', lime: '#B7F23D', grey: '#9AA6B2' };
   function init() {
-    map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([-26.5, 121.5], 5);
+    map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true, zoomSnap: 0.5, wheelPxPerZoomLevel: 90, wheelDebounceTime: 30, fadeAnimation: false }).setView([-26.5, 121.5], 5);
     const esri = n => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${n}/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 20, maxNativeZoom: 16, attribution: 'Esri, HERE, Garmin, © OpenStreetMap contributors' });
     base.esriDark = L.layerGroup([esri('World_Dark_Gray_Base'), esri('World_Dark_Gray_Reference')]);
     base.esriLight = L.layerGroup([esri('World_Light_Gray_Base'), esri('World_Light_Gray_Reference')]);
     base.dark = isLight() ? base.esriLight : base.esriDark; base.dark.addTo(map);
     RR.on('theme', retheme);
+    map.on('moveend', () => townsOn && drawTowns());
     ['net', 'zones', 'routes', 'alerts', 'facilities', 'wps', 'me'].forEach(k => L_[k] = L.layerGroup().addTo(map));
     L_.renderer = L.canvas({ padding: 0.4 });
-    map.on('zoomend', () => RR.emit('zoom', map.getZoom()));
+    let zt; map.on('zoomend', () => { clearTimeout(zt); zt = setTimeout(() => RR.emit('zoom', map.getZoom()), 180); });
     return map;
   }
   function addGoogle() {
@@ -40,11 +41,27 @@ RR.map = (() => {
     map.removeLayer(base[baseKey]); base[next].addTo(map); base[next].bringToBack && base[next].bringToBack(); if (base[next].eachLayer) base[next].eachLayer(l => l.bringToBack && l.bringToBack()); baseKey = next;
     return { dark: 'Basic map (Esri)', google: 'Google map', sat: 'Satellite' }[next];
   }
+  // ---- town labels (shown when the background map can't load, e.g. no signal) ----
+  let towns = [], townsOn = false; const townLayer = L.layerGroup();
+  function drawTowns() {
+    townLayer.clearLayers(); if (!townsOn || !towns.length) return;
+    const z = map.getZoom(); if (z < 6) return;
+    const b = map.getBounds().pad(0.05), cells = new Set(), cw = z < 9 ? 150 : 120, ch = z < 9 ? 60 : 44;
+    let n = 0;
+    for (const t of towns) {
+      if (n >= 150) break; const ll = [t.at[1], t.at[0]]; if (!b.contains(ll)) continue;
+      const pt = map.latLngToContainerPoint(ll), key = Math.floor(pt.x / cw) + ',' + Math.floor(pt.y / ch);
+      if (cells.has(key)) continue; cells.add(key);
+      L.marker(ll, { interactive: false, keyboard: false, icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="townlbl ${z < 9 ? 'big' : ''}">${esc(t.name)}</div>` }) }).addTo(townLayer); n++;
+    }
+  }
+  function setTowns(list) { towns = (list || []).slice().sort((a, b) => (a.area || 0) - (b.area || 0)); drawTowns(); }
+  function showTowns(on) { townsOn = on; if (on) townLayer.addTo(map); else map.removeLayer(townLayer); drawTowns(); }
   // ---- approved network ----
   function drawNetwork(data, show) {
     L_.net.clearLayers(); if (!show || !data) return;
     const style = f => f.properties._cond ? { color: '#FFB020', weight: 2, opacity: 0.45 } : { color: '#B7F23D', weight: 2, opacity: data.general ? 0.16 : 0.32 };
-    L.geoJSON({ type: 'FeatureCollection', features: data.lines }, { renderer: L_.renderer, interactive: false, style }).addTo(L_.net);
+    L.geoJSON({ type: 'FeatureCollection', features: data.lines }, { renderer: L_.renderer, interactive: false, style, smoothFactor: 1.6 }).addTo(L_.net);
     if (data.prohibited && data.prohibited.length) L.geoJSON({ type: 'FeatureCollection', features: data.prohibited }, { renderer: L_.renderer, interactive: false, style: { color: '#F04444', weight: 3, opacity: 0.8 } }).addTo(L_.net);
   }
   function drawZones(zones) { L_.zones.clearLayers(); zones.forEach(z => L.polygon(z.poly.map(p => [p[1], p[0]]), { color: '#F04444', weight: 1.5, dashArray: '5 6', fillColor: '#F04444', fillOpacity: 0.07 }).addTo(L_.zones).bindTooltip(z.name + ' (approximate)')); }
@@ -64,9 +81,24 @@ RR.map = (() => {
   const clearRoutes = () => L_.routes.clearLayers();
   // ---- markers ----
   const dotIcon = (t, icon, size = 30, filled) => L.divIcon({ className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2], html: `<div style="width:${size}px;height:${size}px;border-radius:${filled ? '50% 50% 50% 4px' : '50%'};background:${filled ? (tone[t] || t) : '#101418'};border:2px solid ${filled ? '#fff' : (tone[t] || t)};color:${filled ? '#101418' : (tone[t] || t)};display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.6)">${RR.icon(icon, 'i').replace('class="i"', `style="width:${size * 0.55}px;height:${size * 0.55}px"`)}</div>` });
+  // markers are kept between calls and only added/removed when the list changes (no rebuild on every zoom);
+  // zoomed far out they're drawn as light canvas dots instead of icons
+  const alertMk = new Map(); let alertMode = null, alertClick = null;
   function setAlerts(list, onClick) {
-    L_.alerts.clearLayers();
-    list.forEach(a => { const cat = RR.alerts.CATS.find(c => c.key === a.cat) || {}; L.marker([a.at[1], a.at[0]], { icon: dotIcon(a.tone, a.icon || cat.icon || 'alert', a.cat === 'height' ? 24 : a.cat === 'report' ? 34 : 30, a.cat === 'report'), zIndexOffset: a.cat === 'report' ? 800 : a.tone === 'red' ? 500 : 0 }).addTo(L_.alerts).bindTooltip(esc(a.title)).on('click', () => onClick && onClick(a)); });
+    alertClick = onClick;
+    const mode = map.getZoom() < 8 ? 'dot' : 'icon';
+    if (mode !== alertMode) { L_.alerts.clearLayers(); alertMk.clear(); alertMode = mode; }
+    const keep = new Set();
+    for (const a of list) {
+      const id = (a.id || a.at.join()) + '|' + a.tone + '|' + (a.icon || a.cat); keep.add(id);
+      const old = alertMk.get(id);
+      if (old) { old._a = a; continue; }
+      let m;
+      if (mode === 'dot') m = L.circleMarker([a.at[1], a.at[0]], { renderer: L_.renderer, radius: a.cat === 'report' ? 6 : 4.5, weight: 1.5, color: '#101418', fillColor: tone[a.tone] || '#FFB020', fillOpacity: 1 });
+      else { const cat = RR.alerts.CATS.find(c => c.key === a.cat) || {}; m = L.marker([a.at[1], a.at[0]], { icon: dotIcon(a.tone, a.icon || cat.icon || 'alert', a.cat === 'height' ? 24 : a.cat === 'report' ? 34 : 30, a.cat === 'report'), zIndexOffset: a.cat === 'report' ? 800 : a.tone === 'red' ? 500 : 0 }); }
+      m._a = a; m.bindTooltip(esc(a.title)).on('click', () => alertClick && alertClick(m._a)).addTo(L_.alerts); alertMk.set(id, m);
+    }
+    for (const [id, m] of alertMk) if (!keep.has(id)) { L_.alerts.removeLayer(m); alertMk.delete(id); }
   }
   function setFacilities(list, onClick) {
     L_.facilities.clearLayers();
@@ -82,5 +114,5 @@ RR.map = (() => {
     else meMarker.setLatLng([lat, lon]);
   }
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  return { init, addGoogle, cycleBase, setBase, baseKey: () => baseKey, hasGoogle: () => !!base.google, drawNetwork, drawZones, drawRoutes, clearRoutes, setAlerts, setFacilities, setWaypoints, setMe, get: () => map, layer: k => L_[k] };
+  return { setTowns, showTowns, init, addGoogle, cycleBase, setBase, baseKey: () => baseKey, hasGoogle: () => !!base.google, drawNetwork, drawZones, drawRoutes, clearRoutes, setAlerts, setFacilities, setWaypoints, setMe, get: () => map, layer: k => L_[k] };
 })();
