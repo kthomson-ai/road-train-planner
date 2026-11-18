@@ -111,5 +111,48 @@ RR.routing = (() => {
     return { routes, restr, G, ms };
   }
   function reroute(G, pts, labels, firstStopNo) { const r = state.restr; return RAV.routeVia(G, pts, labels, firstStopNo, { blocked: r && r.blocked, slow: r && r.slow, pen: r && r.pen }); }
-  return { state, prepare, plan, reroute, alongRoute, closuresBlocking, restrictions };
+  // ---------- road train assembly area swap ----------
+  // The big combination drives to an RTAA on its own network, drops trailers, and the smaller vehicle carries on
+  // to the destination on its network. Tries the most promising assembly areas and keeps the quickest.
+  const G2cache = new Map();
+  async function graphForKey(key, onStatus) {
+    if (G2cache.has(key)) return G2cache.get(key);
+    onStatus && onStatus(`Loading ${RR.net(key).short} for the second half…`);
+    const data = await RR.mainroads.network(key);
+    const G = RAV.build(data.lines, data.ints, data.br); const out = { G, data }; G2cache.set(key, out); return out;
+  }
+  function mergeConf(c1, c2) { const seg = {}; for (const k of Object.keys(c1.seg)) seg[k] = c1.seg[k] + (c2.seg[k] || 0); return { seg, parts: c1.parts.concat(c2.parts), gaps: c1.gaps.concat(c2.gaps) }; }
+  async function planSwap({ pts, labels, profile, profile2, prefs = {}, onStatus }) {
+    if (pts.length !== 2 || !profile2) return null;
+    const rtaas = state.facilities.filter(f => f.kind === 'rtaa');
+    if (!rtaas.length) return null;
+    const G1 = state.base, { G: G2, data: d2 } = await graphForKey(profile2.net, onStatus);
+    onStatus && onStatus('Checking road train assembly areas…'); await new Promise(r => setTimeout(r, 10));
+    const r1 = restrictions(G1, profile, pts, prefs);
+    const dims2 = RR.vehicles.dims(profile2), zones = C.zones.filter(z => !pts.some(p => RAV.inPoly(p, z.poly)));
+    const r2 = RAV.restrictions(G2, dims2, { structures: state.structures, zones, allZones: C.zones, prohibited: d2.prohibited || [] });
+    const [a, b] = pts, direct = hav(a, b);
+    const cands = rtaas.map(f => ({ f, score: hav(a, f.at) + hav(f.at, b) })).filter(x => x.score < direct * 1.6 + 30000).sort((x, y) => x.score - y.score).slice(0, 8);
+    let best = null;
+    for (const { f } of cands) {
+      const leg1 = RAV.routeVia(G1, [a, f.at], [labels[0], f.name], 1, { blocked: r1.blocked, slow: r1.slow, pen: r1.pen });
+      if (leg1.error || leg1.t.d > 400) continue;
+      const leg2 = RAV.routeVia(G2, [f.at, b], [f.name, labels[1]], 1, { blocked: r2.blocked, slow: r2.slow });
+      if (leg2.error || leg2.s.d > 400) continue;
+      const secs = leg1.secs + leg2.secs + 30 * 60; // allow ~30 min to drop trailers
+      if (!best || secs < best.secs) best = { f, leg1, leg2, secs };
+    }
+    if (!best) return null;
+    const { f, leg1, leg2 } = best;
+    const steps = leg1.steps.concat([{ instr: 'Arrive at stop 1:', name: `${f.name}: drop trailers, continue as ${profile2.name}`, len: 0, at: f.at, pts: [f.at], stop: 1 }], leg2.steps.map(s => ({ ...s, instr: s.instr.replace(/^Start on/, 'Leave on') })));
+    const r = { line: leg1.line.concat(leg2.line.slice(1)), steps, total: leg1.total + leg2.total, secs: leg1.secs + leg2.secs + 30 * 60, s: leg1.s, t: leg2.t,
+      legs2: leg1.legs2.concat(leg2.legs2), conditions: leg1.conditions.concat(leg2.conditions), rulesNear: leg1.rulesNear.concat(leg2.rulesNear), bridgesNear: (leg1.bridgesNear || []).concat(leg2.bridgesNear || []),
+      swap: { at: f.at, name: f.name, to: profile2.name, net2: profile2.net } };
+    r.conf = mergeConf(confidence(G1, { ...leg1, s: leg1.s, t: { d: 0 } }), confidence(G2, { ...leg2, s: { d: 0 }, t: leg2.t }));
+    r.along = alongRoute(r); r.tight = RAV.tightStructures(leg1.line, { structures: state.structures }, RR.vehicles.dims(profile).height).concat(RAV.tightStructures(leg2.line, { structures: state.structures }, dims2.height));
+    r.zones = RAV.zonesOnRoute(leg2.line, C.zones); r.metro = r.line.some(C.metro);
+    r.label = `Swap at ${f.name.replace(/road train assembly area/i, 'RTAA')}`;
+    return r;
+  }
+  return { state, prepare, plan, reroute, alongRoute, closuresBlocking, restrictions, planSwap };
 })();

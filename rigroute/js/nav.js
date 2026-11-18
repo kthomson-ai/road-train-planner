@@ -103,7 +103,7 @@ const NAV = (() => {
     const r = opts.reroute(pt, reachedStop);
     rerouting = false; offCount = 0;
     if (r && !r.error) { prepare(r); opts.drawRoute(r); say(`New route. ${fmtKm(r.total).replace('km', 'kilometres')} to go.`); }
-    else { say('Could not find a legal route from here. Head back to the approved route.'); flash('No legal route from here. Return to the approved route (blue line).'); }
+    else { say('Could not find a legal route from here. Head back to the approved route.'); flash('No legal route from here. Return to the approved route (lime line).'); }
   }
 
   // ---- next-turn junction diagram ----

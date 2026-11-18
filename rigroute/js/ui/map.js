@@ -57,6 +57,13 @@ RR.map = (() => {
   }
   function setTowns(list) { towns = (list || []).slice().sort((a, b) => (a.area || 0) - (b.area || 0)); drawTowns(); }
   function showTowns(on) { townsOn = on; if (on) townLayer.addTo(map); else map.removeLayer(townLayer); drawTowns(); }
+  // ---- saved sites (depots, customer sites) ----
+  const siteLayer = L.layerGroup(); let siteOn = false;
+  function setSites(list, onClick) {
+    siteLayer.clearLayers(); if (!map) return;
+    if (!siteOn) { siteLayer.addTo(map); siteOn = true; }
+    for (const s of list || []) L.marker([s.at[1], s.at[0]], { icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div style="width:26px;height:26px;border-radius:8px;background:#36A5F5;border:2px solid #101418;color:#fff;display:grid;place-items:center">${RR.icon('pin')}</div>` }), zIndexOffset: 300 }).bindTooltip(esc(s.name)).on('click', () => onClick && onClick(s)).addTo(siteLayer);
+  }
   // ---- approved network ----
   function drawNetwork(data, show) {
     L_.net.clearLayers(); if (!show || !data) return;
@@ -114,5 +121,5 @@ RR.map = (() => {
     else meMarker.setLatLng([lat, lon]);
   }
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  return { setTowns, showTowns, init, addGoogle, cycleBase, setBase, baseKey: () => baseKey, hasGoogle: () => !!base.google, drawNetwork, drawZones, drawRoutes, clearRoutes, setAlerts, setFacilities, setWaypoints, setMe, get: () => map, layer: k => L_[k] };
+  return { setSites, setTowns, showTowns, init, addGoogle, cycleBase, setBase, baseKey: () => baseKey, hasGoogle: () => !!base.google, drawNetwork, drawZones, drawRoutes, clearRoutes, setAlerts, setFacilities, setWaypoints, setMe, get: () => map, layer: k => L_[k] };
 })();

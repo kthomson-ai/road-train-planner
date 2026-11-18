@@ -15,6 +15,7 @@ RR.places = (() => {
     const q = norm(text); if (q.length < 2) return [];
     const out = [];
     for (const p of recents()) { const s = score(q, p.label); if (s) out.push({ ...p, s: s + 15, kind: 'Recent' }); }
+    for (const st of (RR.shared ? RR.shared.sites() : [])) { const sc = score(q, st.name); if (sc) out.push({ label: st.name, lat: st.at[1], lon: st.at[0], s: sc + 10, kind: 'Saved site' }); }
     for (const t of towns) { const s = score(q, t.name); if (s) out.push({ label: `${t.name}${t.pc ? ' ' + t.pc : ''}, WA`, lat: t.at[1], lon: t.at[0], s, kind: 'Town / locality' }); }
     for (const f of (RR.routing.state.facilities || [])) { const s = score(q, f.name); if (s) out.push({ label: f.name, lat: f.at[1], lon: f.at[0], s: s - 5, kind: 'Main Roads facility' }); }
     const data = RR.routing.state.data; const seen = new Set();

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#041131">
+<title>RigRoute – Live ETA</title>
+<link rel="icon" href="img/favicon-64.png?v=14">
+<link rel="stylesheet" href="js/vendor/leaflet.css">
+<style>
+  :root { --bg:#101418; --surface:#1C242C; --line:#2A343E; --text:#F5F7FA; --muted:#9AA6B2; --lime:#B7F23D; --amber:#FFB020; --red:#F04444; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+  #map { position: fixed; inset: 0; background: #0b0f12; }
+  .card { position: fixed; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 500; max-width: 460px; margin: 0 auto; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  .top { display: flex; align-items: center; gap: 12px; }
+  .top img { width: 42px; height: 42px; }
+  .eta { font-size: 28px; font-weight: 800; line-height: 1.1; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .row { margin-top: 10px; font-size: 14px; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(183,242,61,.15); color: var(--lime); }
+  .pill.done { background: rgba(154,166,178,.18); color: var(--muted); }
+  .stale { color: var(--amber); }
+  .foot { color: var(--muted); font-size: 11.5px; margin-top: 10px; }
+  .leaflet-control-attribution { background: rgba(16,20,24,.7) !important; color: #9aa6b2 !important; }
+  .leaflet-control-attribution a { color: #c4cad1 !important; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="card" id="card">
+  <div class="top"><img src="img/logo-pin.png?v=14" alt="RigRoute"><div><div class="eta" id="eta">Loading…</div><div class="sub" id="sub"></div></div></div>
+  <div class="row" id="row"></div>
+  <div class="foot">Shared from RigRoute. Position updates about every minute while the driver is on the road. ETA is an estimate.</div>
+</div>
+<script src="js/vendor/leaflet.js"></script>
+<script>
+(() => {
+  const ENDPOINT = 'https://xybywnjskowqaxlbrfya.supabase.co/rest/v1', KEY = 'sb_publishable_uGKkcwYOZHcgKP2VZBptKg_xmNXwFwR';
+  const tk = new URLSearchParams(location.search).get('t') || '';
+  const $ = id => document.getElementById(id);
+  const map = L.map('map', { zoomControl: false }).setView([-26, 121], 5);
+  const esri = n => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${n}/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 18, maxNativeZoom: 16, attribution: 'Esri, HERE, Garmin, © OpenStreetMap contributors' });
+  esri('World_Dark_Gray_Base').addTo(map); esri('World_Dark_Gray_Reference').addTo(map);
+  const pin = (c, s) => L.divIcon({ className: '', iconSize: [s, s], iconAnchor: [s / 2, s / 2], html: `<div style="width:${s}px;height:${s}px;border-radius:50%;background:${c};border:3px solid #101418;box-shadow:0 0 0 2px ${c}55"></div>` });
+  let truck = null, dest = null, fitted = false;
+  const fmt = d => d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
+  async function load() {
+    if (!tk) { $('eta').textContent = 'Link not valid'; return; }
+    try {
+      const r = await fetch(ENDPOINT + '/rpc/get_share', { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ tk }) });
+      const rows = await r.json(); const s = rows && rows[0];
+      if (!s) { $('eta').textContent = 'Link expired'; $('sub').textContent = 'This trip is no longer being shared.'; return; }
+      const upd = new Date(s.updated), mins = Math.round((Date.now() - upd) / 60000);
+      if (s.status === 'driving' && s.eta) { const e = new Date(s.eta), left = Math.max(0, Math.round((e - Date.now()) / 60000)); $('eta').textContent = `Arriving about ${fmt(e)}`; $('sub').textContent = `${left < 60 ? left + ' min' : Math.floor(left / 60) + ' h ' + String(left % 60).padStart(2, '0') + ' min'} away · to ${s.dest}`; }
+      else { $('eta').textContent = s.status === 'arrived' ? 'Arrived' : 'Trip ended'; $('sub').textContent = s.dest ? 'to ' + s.dest : ''; }
+      $('row').innerHTML = `<span class="pill ${s.status === 'driving' ? '' : 'done'}">${s.status === 'driving' ? 'On the road' : s.status === 'arrived' ? 'Arrived' : 'Ended'}</span> ${s.vehicle ? '· ' + s.vehicle.replace(/[<>&]/g, '') + ' ' : ''}<span class="${mins > 5 && s.status === 'driving' ? 'stale' : ''}">· updated ${mins < 1 ? 'just now' : mins + ' min ago'}${mins > 5 && s.status === 'driving' ? ' (may be out of mobile coverage)' : ''}</span>`;
+      if (s.dest_lat != null) { if (!dest) dest = L.marker([s.dest_lat, s.dest_lon], { icon: pin('#F04444', 18) }).addTo(map).bindTooltip('Destination'); }
+      if (s.lat != null) { if (!truck) truck = L.marker([s.lat, s.lon], { icon: pin('#B7F23D', 24), zIndexOffset: 500 }).addTo(map).bindTooltip('Truck'); else truck.setLatLng([s.lat, s.lon]); }
+      if (!fitted && truck) { fitted = true; const b = L.latLngBounds([truck.getLatLng()].concat(dest ? [dest.getLatLng()] : [])); map.fitBounds(b.pad(0.3), { maxZoom: 12, paddingBottomRight: [0, 160] }); }
+    } catch { $('row').innerHTML = '<span class="stale">Couldn\'t refresh. Retrying…</span>'; }
+  }
+  load(); setInterval(load, 30000);
+})();
+</script>
+</body>
+</html>

@@ -200,7 +200,7 @@ details.sec .in { padding: 0 14px 12px; }
 
 /* ---------- driving mode ---------- */
 #navbar, #navbot, #flash, #junc { display: none; }
-body.driving .topbar, body.driving .tabbar, body.driving .fabs, body.driving .planbtn, body.driving .sheet:not(#sheet-report):not(#sheet-addstop):not(#sheet-feedback), body.driving .livepill, body.driving .suggest { display: none !important; }
+body.driving .topbar, body.driving .tabbar, body.driving .fabs, body.driving .planbtn, body.driving .sheet:not(#sheet-report):not(#sheet-addstop):not(#sheet-feedback):not(#sheet-site), body.driving .livepill, body.driving .suggest { display: none !important; }
 body.driving #navbar { display: grid; grid-template-columns: 70px 1fr; gap: 2px 14px; align-items: center; position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: var(--surface); border-bottom: 3px solid var(--lime); color: var(--text); padding: calc(14px + var(--safe-t)) 18px 14px; box-shadow: var(--shadow); }
 #navbar .na { grid-row: span 2; width: 70px; height: 70px; border-radius: 18px; background: var(--lime); color: var(--lime-ink); font-size: 42px; display: grid; place-items: center; font-weight: 900; }
 #navbar .nd { font: 900 34px/1.05 var(--display); letter-spacing: -.02em; }
@@ -281,3 +281,18 @@ body.driving #netpill { top: calc(104px + var(--safe-t)); }
 body.offline-map #map, body.offline-map .leaflet-container { background: var(--mapbg); }
 .townlbl { font: 700 12px/1 var(--font); color: var(--text); text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 6px var(--bg); white-space: nowrap; pointer-events: none; transform: translate(-50%, -50%); }
 .townlbl.big { font-size: 13.5px; font-weight: 800; }
+
+.modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 18px; background: rgba(4,8,12,.72); backdrop-filter: blur(4px); }
+.modal[hidden] { display: none; }
+.mbox { width: min(100%, 460px); max-height: 92vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--line2); border-radius: 22px; padding: 22px 20px; box-shadow: var(--shadow); text-align: left; }
+.mbox h2 { margin: 10px 0 8px; font-size: 22px; } .mbox p { color: var(--muted); margin: 0 0 10px; line-height: 1.45; } .mbox p b { color: var(--text); }
+.mbox ul { margin: 0 0 12px; padding-left: 18px; line-height: 1.45; } .mbox li { margin: 6px 0; color: var(--text); font-size: 14.5px; }
+body.driving #sheet-site { z-index: 61; bottom: 0; }
+#fatChip { display: none; }
+body.driving #fatChip:not([hidden]) { display: flex; align-items: center; gap: 6px; position: fixed; right: 12px; top: calc(118px + var(--safe-t)); z-index: 46; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line2); font-size: 13px; font-weight: 700; box-shadow: var(--shadow); }
+#fatChip.due { border-color: var(--amber); color: var(--amber); } #fatChip.over { border-color: var(--red); color: var(--red); }
+.plist { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.plist:last-child { border-bottom: 0; } .plist .tx { flex: 1; min-width: 0; } .plist b { display: block; } .plist small { color: var(--muted); font-size: 12.5px; }
+.plist .st { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(183,242,61,.15); color: var(--lime-text); flex: none; }
+.plist .st.bad { background: rgba(240,68,68,.15); color: var(--red); }
+.rbtns { display: flex; gap: 8px; margin: -4px 0 12px; } .rbtns .btn { flex: 1; height: 42px; font-size: 14px; }
