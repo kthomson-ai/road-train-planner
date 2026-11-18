@@ -79,7 +79,7 @@
 <div class="app">
   <aside>
     <h1>WA Road Train Route Planner</h1>
-    <div class="sub">Prototype v0.4 (voice + driving mode) · routes only on Main Roads WA approved RAV networks</div>
+    <div class="sub">Prototype v0.4.1 (voice + driving mode) · routes only on Main Roads WA approved RAV networks</div>
 
     <label for="net">Vehicle / approved network</label>
     <select id="net">
@@ -283,18 +283,23 @@ async function geocode(q) {
   const r = await fetch(url, { headers: { 'Accept-Language': 'en' } }); const j = await r.json();
   return j.map(x => ({ lat: +x.lat, lon: +x.lon, label: x.display_name.replace(/, Western Australia.*$/, ', WA') }));
 }
+const sTimer = {}, sToken = {}, sSeq = {};
 async function resolveInput(which) { // returns true when the point is set
   const q = $(which).value.trim(); const box = $(which + 'Choices');
+  clearTimeout(sTimer[which]); sSeq[which] = (sSeq[which] || 0) + 1; // drop any pending type-ahead
   if (!q) return false; if (P[which] && P[which].label === q) return true;
   box.innerHTML = ''; box.className = '';
   status('Searching…');
   try {
     const res = await geocode(q);
     if (!res.length) { status('No match in WA for "' + q + '".'); return false; }
-    if (res.length === 1) { setPoint(which, res[0].lon, res[0].lat, res[0].label); map.setView([res[0].lat, res[0].lon], 10); status(''); return true; }
-    box.className = 'choices';
-    res.forEach(x => { const d = document.createElement('div'); d.textContent = x.label; d.onclick = () => { setPoint(which, x.lon, x.lat, x.label); box.innerHTML = ''; box.className = ''; map.setView([x.lat, x.lon], 10); }; box.appendChild(d); });
-    status('Pick the right place, then press Find route.');
+    setPoint(which, res[0].lon, res[0].lat, res[0].label); map.setView([res[0].lat, res[0].lon], 10); status('');
+    if (res.length > 1) { // best match chosen; offer the others in case it's wrong
+      box.className = 'choices';
+      const h = document.createElement('div'); h.style.cssText = 'font-size:12px;color:var(--muted);cursor:default;background:#f7f9fb'; h.textContent = 'Not the right place? Tap another:'; box.appendChild(h);
+      res.slice(1).forEach(x => { const d = document.createElement('div'); d.textContent = x.label; d.onclick = () => { setPoint(which, x.lon, x.lat, x.label); box.innerHTML = ''; box.className = ''; map.setView([x.lat, x.lon], 10); if (LAST && P.from && P.to) $('go').click(); }; box.appendChild(d); });
+    }
+    return true;
   } catch (e) { if (netFail(e)) { showBlocked(); status('Address search could not connect.'); } else status('Address search failed: ' + e.message); }
   return false;
 }
@@ -303,7 +308,6 @@ for (const w of ['from', 'to']) {
   $(w).addEventListener('input', () => { if (P[w] && $(w).value !== P[w].label) { P[w] = null; } updateGo(); suggest(w); });
 }
 // type-ahead suggestions (Google only)
-const sTimer = {}, sToken = {}, sSeq = {};
 function suggest(w) {
   clearTimeout(sTimer[w]); const q = $(w).value.trim(); const box = $(w + 'Choices');
   if (!G_OK || q.length < 3 || /^-?\d+(\.\d+)?\s*,/.test(q)) return;
@@ -312,8 +316,8 @@ function suggest(w) {
     try {
       if (!sToken[w]) sToken[w] = new gLib.Token();
       const { suggestions } = await gLib.Auto.fetchAutocompleteSuggestions({ input: q, includedRegionCodes: ['au'], locationRestriction: WA, sessionToken: sToken[w] });
-      if (seq !== sSeq[w] || $(w).value.trim() !== q) return;
-      box.innerHTML = ''; box.className = suggestions.length ? 'choices' : '';
+      if (seq !== sSeq[w] || $(w).value.trim() !== q || P[w] || !suggestions.length) return;
+      box.innerHTML = ''; box.className = 'choices';
       suggestions.slice(0, 5).forEach(sg => { const pp = sg.placePrediction; if (!pp) return; const d = document.createElement('div'); d.textContent = shortAddr(pp.text.text);
         d.onmousedown = e => e.preventDefault();
         d.onclick = async () => { try { const pl = pp.toPlace(); await pl.fetchFields({ fields: ['location', 'formattedAddress', 'displayName'] }); sToken[w] = null; box.innerHTML = ''; box.className = ''; const lat = pl.location.lat(), lon = pl.location.lng(); setPoint(w, lon, lat, shortAddr(pp.text.text)); map.setView([lat, lon], 12); } catch (e) { status('Could not look up that place: ' + e.message); } };
