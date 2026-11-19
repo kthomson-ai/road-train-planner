@@ -308,8 +308,8 @@
     const r = app.RES.routes[app.sel]; if (!r) return; follow = true; app.demo = !!demo; app.reached = r.swap ? r.swap.done || 0 : 0;
     const endInfo = r.t.d > 300 ? `Your destination is ${fmtKm(r.t.d)} further, off the approved network.` : null;
     const ok = NAV.start(r, {
-      map: RR.map.get(), arrow: ARROW, net: RR.net(app.PROF.net).short, endInfo, follow: () => follow, simSpeed: () => 1,
-      ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel') } },
+      map: RR.map.get(), arrow: ARROW, net: RR.net(app.PROF.net).short, endInfo, destName: destOf(r).label.split(',')[0], follow: () => follow, simSpeed: () => 1,
+      ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel'), name: $('jName') } },
       graph: () => S.data.general ? S.local.g || S.base : S.base,
       reroute: (pt, reached) => { if (r.swap) { const nr = RR.routing.rerouteSwap(r, pt, Math.max(reached, app.reached || 0)); if (nr && !nr.error) { const offNet = nr.s && nr.s.d > 120; if (offNet) { nr.conf.gaps = [{ ...nr.s, req: pt }]; setTimeout(() => wrongTurnWarning(nr), 2600); } else nr.conf.gaps = nr.conf.gaps.filter(g => g !== nr.s); app.RES.routes[app.sel] = nr; app.RUN = nr.run; } return nr; }
         const run = app.RUN; const stops = run.pts.slice(1, -1), labs = run.labels.slice(1, -1); const G = S.data.general ? S.local.g || S.base : S.base; const nr = RR.routing.reroute(G, [pt, ...stops.slice(reached), run.pts[run.pts.length - 1]], ['Current position', ...labs.slice(reached), run.labels[run.labels.length - 1]], reached + 1); if (nr && !nr.error) {
@@ -987,6 +987,30 @@
   $('stSave').onclick = async () => { if (!$('stName').value.trim()) return toast('Give the site a name.'); try { await RR.shared.saveSite({ ...editingSite, name: $('stName').value.trim(), kind: $('stKind').value, notes: $('stNotes').value.trim() }); toast('Site saved and shared with testers.'); openSheet(app.RES && !app.RES.error ? 'route' : 'profile'); if (app.RES && !app.RES.error) renderRoute(app.RES.routes[app.sel]); } catch (e) { toast('Couldn\'t save: ' + e.message, 5000); } };
   $('stDel').onclick = async () => { try { await RR.shared.deleteSite(editingSite.id); toast('Site deleted.'); openSheet('profile'); } catch (e) { toast('Couldn\'t delete: ' + e.message); } };
   RR.on('sites', () => { if (app.sheet === 'profile') renderSites(); RR.map.setSites(haz.sites === false ? [] : RR.shared.sites(), s => editSite(s)); });
+
+  // ---------- speed and speed limit while driving ----------
+  $('setSpeedWarn').checked = RR.store.get('speedWarn', true); $('setSpeedWarn').onchange = () => RR.store.set('speedWarn', $('setSpeedWarn').checked);
+  let spPrev = null, spKmh = null, overSince = 0, overSaid = { limit: 0, t: 0 };
+  RR.on('navfix', f => {
+    if (!NAV.isActive()) return;
+    // speed: the phone's GPS speed when it gives one, otherwise worked out from movement between fixes
+    let kmh = f.speed != null && f.speed >= 0 ? f.speed * 3.6 : null;
+    if (kmh == null && spPrev && f.t - spPrev.t > 400) { const v = RAV.hav(spPrev.pt, f.pt) / ((f.t - spPrev.t) / 1000) * 3.6; if (v < 160) kmh = spKmh == null ? v : spKmh * 0.6 + v * 0.4; }
+    if (!spPrev || f.t - spPrev.t > 400) spPrev = f;
+    if (kmh != null) spKmh = kmh;
+    $('spdVal').textContent = spKmh == null ? '–' : Math.round(spKmh);
+    const r = app.RES && app.RES.routes[app.sel]; if (!r) return;
+    if (!r._speed && navigator.onLine) RR.speed.load(r).catch(() => { });
+    const L = f.off < 60 ? RR.speed.limitAt(r, f.along, app.PROF) : null, lim = L && L.limit ? L.limit : 0;
+    $('spdLim').hidden = !lim; if (lim) $('spdLim').textContent = lim;
+    $('spdWhy').hidden = !(L && L.why); if (L && L.why) $('spdWhy').textContent = L.why;
+    const over = lim && spKmh != null && spKmh > lim + 3;
+    $('spd').classList.toggle('over', !!over);
+    if (!over) { overSince = 0; return; }
+    if (!overSince) overSince = f.t;
+    if ($('setSpeedWarn').checked && f.t - overSince > 5000 && spKmh > lim + 5 && (overSaid.limit !== lim || f.t - overSaid.t > 120000)) { overSaid = { limit: lim, t: f.t }; NAV._say(`Over the limit. The limit here is ${lim}.`); }
+  });
+  RR.on('drivestate', () => { spPrev = null; spKmh = null; overSince = 0; $('spdVal').textContent = '–'; $('spdLim').hidden = true; $('spdWhy').hidden = true; $('spd').classList.remove('over'); });
 
   // ---------- profiles ----------
   function renderProfiles() {

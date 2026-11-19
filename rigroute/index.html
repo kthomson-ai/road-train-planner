@@ -9,22 +9,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="img/favicon-64.png?v=22">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=22">
+<link rel="icon" href="img/favicon-64.png?v=23">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=23">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="js/vendor/leaflet.css">
-<link rel="stylesheet" href="css/rigroute.css?v=22">
+<link rel="stylesheet" href="css/rigroute.css?v=23">
 </head>
 <body>
-<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=22" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
+<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=23" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
 
 <div id="map" aria-label="Map"></div>
 
 <!-- top: search + vehicle -->
 <div class="topbar">
   <div class="search">
-    <img src="img/logo-mark.png?v=22" alt="RigRoute">
+    <img src="img/logo-mark.png?v=23" alt="RigRoute">
     <input id="q" type="search" placeholder="Where to?" autocomplete="off" enterkeyhint="search" aria-label="Search destination">
     <button class="vchip" id="vchip" aria-label="Change vehicle"><span class="vi" data-icon="truck"></span><div><b id="vchipName">Vehicle</b><small id="vchipSub"></small></div></button>
   </div>
@@ -221,6 +221,7 @@
       <label class="toggle"><span><b>Voice guidance</b><small>Spoken turns and warnings</small></span><span class="switch"><input type="checkbox" id="setVoice" checked><i></i></span></label>
       <div class="field" style="margin-top:12px"><label for="setVoiceName">Voice</label><select class="inp" id="setVoiceName"></select></div>
       <div class="field"><label for="setRate">Speaking speed <span id="setRateVal">1.0×</span></label><input type="range" id="setRate" min="0.8" max="1.4" step="0.05" value="1" style="width:100%;accent-color:var(--lime)"></div>
+      <label class="toggle"><span><b>Speeding alert</b><small>Speed turns red and the voice warns when you're over the limit</small></span><span class="switch"><input type="checkbox" id="setSpeedWarn" checked><i></i></span></label>
       <button class="btn block" id="setVoiceTest"><span data-icon="volume"></span>Test voice</button>
       <div class="field" style="margin-top:14px"><label>Appearance</label><div class="seg" id="themeSeg2"><button data-theme="auto">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div></div>
       <label class="toggle"><span><b>Show approved network</b><small>For the selected vehicle</small></span><span class="switch"><input type="checkbox" id="setNet" checked><i></i></span></label>
@@ -278,16 +279,16 @@
 <!-- driving mode -->
 <div id="navbar"><div class="na" id="nArrow">↑</div><div class="nd" id="nDist"></div><div class="ni" id="nInstr"></div><button id="nMute" aria-label="Mute or unmute voice">🔊</button></div>
 <div id="flash"></div>
-<div id="junc"><div class="jl" id="jLabel"></div><svg id="jSvg" viewBox="-70 -70 140 140" preserveAspectRatio="xMidYMid slice"></svg><div class="jd" id="jDist"></div><div class="jbar"><i id="jBar"></i></div></div>
+<div id="junc"><div class="jl" id="jLabel"></div><svg id="jSvg" viewBox="-70 -70 140 140" preserveAspectRatio="xMidYMid slice"></svg><div class="jn" id="jName"></div><div class="jd" id="jDist"></div><div class="jbar"><i id="jBar"></i></div></div>
 <div id="navbot"><span class="eta" id="nEta"></span><button id="nReport" class="rep" aria-label="Report"><span data-icon="report"></span>Report</button><button id="nAddStop" aria-label="Add a stop"><span data-icon="plus"></span>Stop</button><button class="stop" id="nStop">End</button></div>
 <div id="closureBar"><span class="ci" data-icon="block"></span><div class="ct"><b id="cbTitle">Road closed ahead</b><small id="cbSub"></small></div><button class="btn primary" id="cbReroute">Reroute</button><button class="iconbtn" id="cbDismiss" aria-label="Dismiss"><span data-icon="x"></span></button></div>
 <div id="fatChip" hidden></div>
-<div id="drvFabs"><button id="nCentre" hidden aria-label="Re-centre the map">⌖ Re-centre</button><button id="nVoice" aria-label="Voice command"><span data-icon="mic"></span></button></div>
+<div id="drvFabs"><button id="nCentre" hidden aria-label="Re-centre the map">⌖ Re-centre</button><button id="nVoice" aria-label="Voice command"><span data-icon="mic"></span></button><div id="spd" aria-live="off"><div id="spdLim" hidden></div><div id="spdNow"><b id="spdVal">–</b><small>km/h</small></div><div id="spdWhy" hidden></div></div></div>
 <div id="listening"><div class="lw"><span data-icon="mic"></span></div><b id="lsText">Listening…</b><small id="lsHint">Say "report crash", "cattle on road", "find diesel" or "toilet stop"</small></div>
 <div id="netpill" hidden><span data-icon="alert"></span><span id="netText">No signal: navigation still works</span></div>
 <div id="disclaimer" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="dcTitle">
   <div class="mbox">
-    <img src="img/logo-pin.png?v=22" alt="" style="width:56px;height:56px">
+    <img src="img/logo-pin.png?v=23" alt="" style="width:56px;height:56px">
     <h2 id="dcTitle">Before you drive</h2>
     <p>RigRoute is a <b>planning aid</b>. It uses Main Roads WA network and live data, but data can be incomplete or out of date.</p>
     <ul>
@@ -305,22 +306,23 @@
 
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/Leaflet.GoogleMutant.js"></script>
-<script src="js/core.js?v=22"></script>
-<script src="js/nav.js?v=22"></script>
-<script src="js/services/config.js?v=22"></script>
-<script src="js/services/store.js?v=22"></script>
-<script src="js/services/mainroads.js?v=22"></script>
-<script src="js/services/google.js?v=22"></script>
-<script src="js/services/vehicles.js?v=22"></script>
-<script src="js/services/routing.js?v=22"></script>
-<script src="js/services/trip.js?v=22"></script>
-<script src="js/services/shared.js?v=22"></script>
-<script src="js/services/places.js?v=22"></script>
-<script src="js/services/alerts.js?v=22"></script>
-<script src="js/services/reports.js?v=22"></script>
-<script src="js/ui/icons.js?v=22"></script>
-<script src="js/ui/theme.js?v=22"></script>
-<script src="js/ui/map.js?v=22"></script>
-<script src="js/ui/app.js?v=22"></script>
+<script src="js/core.js?v=23"></script>
+<script src="js/nav.js?v=23"></script>
+<script src="js/services/config.js?v=23"></script>
+<script src="js/services/store.js?v=23"></script>
+<script src="js/services/mainroads.js?v=23"></script>
+<script src="js/services/google.js?v=23"></script>
+<script src="js/services/vehicles.js?v=23"></script>
+<script src="js/services/routing.js?v=23"></script>
+<script src="js/services/speed.js?v=23"></script>
+<script src="js/services/trip.js?v=23"></script>
+<script src="js/services/shared.js?v=23"></script>
+<script src="js/services/places.js?v=23"></script>
+<script src="js/services/alerts.js?v=23"></script>
+<script src="js/services/reports.js?v=23"></script>
+<script src="js/ui/icons.js?v=23"></script>
+<script src="js/ui/theme.js?v=23"></script>
+<script src="js/ui/map.js?v=23"></script>
+<script src="js/ui/app.js?v=23"></script>
 </body>
 </html>

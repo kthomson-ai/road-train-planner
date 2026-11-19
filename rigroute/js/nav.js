@@ -70,6 +70,7 @@ const NAV = (() => {
     posMarker.setLatLng([lat, lon]);
     if (opts.follow()) map.setView([lat, lon], Math.max(map.getZoom(), 14), { animate: false });
     const { off, along } = locate(pt);
+    try { RR.emit('navfix', { pt, speed, acc, along, off, t: Date.now() }); } catch { }
     const total = cum[cum.length - 1], remain = Math.max(0, total - along);
     // off route?
     if (off > Math.max(80, (acc || 0) * 1.5)) { if (++offCount >= 3 && !rerouting) return reroute(pt); } else offCount = 0;
@@ -127,6 +128,7 @@ const NAV = (() => {
     if (key !== jKey) { jKey = key; box.svg.innerHTML = m ? (m.step.stop ? stopSvg(m.step.stop) : junctionSvg(m)) : flagSvg(); }
     box.dist.textContent = fmtKm(Math.max(0, dist));
     box.bar.style.width = (100 * (1 - Math.min(dist, 1000) / 1000)).toFixed(0) + '%';
+    if (box.name) box.name.textContent = m ? String(m.step.name || '').split(':')[0] : (opts.destName || '');
     box.label.textContent = m ? (m.step.stop ? 'Stop ' + m.step.stop : m.step.instr.replace(/ onto$/, '').replace(/^At the roundabout, /, 'Roundabout: ')) : 'Destination';
   }
   const flagSvg = () => '<circle cx="0" cy="0" r="48" style="fill:var(--surface2)"/><path d="M-10 30 V-30 M-10 -30 L22 -18 L-10 -6" stroke="#B7F23D" stroke-width="7" fill="none" stroke-linejoin="round" stroke-linecap="round"/>';
