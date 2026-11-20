@@ -4,6 +4,8 @@ RR.vehicles = (() => {
   const blank = t => { const p = C.vehicleTypes.find(x => x.key === t) || C.vehicleTypes[1]; return { id: 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: p.label, type: p.key, net: p.net, height: p.h, width: p.w, length: p.l, gvm: '', gcm: '', axles: p.axles, axleLimit: '', trailer: p.trailer, dg: false, osClass: p.key === 'oversize' ? 'class1' : 'none' }; };
   let list = RR.store.get('profiles', null);
   if (!list || !list.length) { list = [Object.assign(blank('roadtrain'), { name: 'Road train (double)' }), Object.assign(blank('semi'), { name: 'Semi-trailer' }), Object.assign(blank('oversize'), { name: 'Low loader – oversize' })]; RR.store.set('profiles', list); }
+  // car mode arrived later: give existing testers a Car profile once (they can delete it)
+  if (!RR.store.get('carAdded', false)) { if (!list.some(v => v.type === 'car')) list.push(blank('car')); RR.store.set('profiles', list); RR.store.set('carAdded', true); }
   let activeId = RR.store.get('activeProfile', list[0].id);
   if (!list.some(v => v.id === activeId)) activeId = list[0].id;
   const save = () => { RR.store.set('profiles', list); RR.store.set('activeProfile', activeId); RR.emit && RR.emit('profiles'); };
@@ -21,6 +23,7 @@ RR.vehicles = (() => {
   // Main Roads: a vehicle over 2.5 m wide, 4.3 m high, 12.5 m (rigid) / 19 m (combination) long or 42.5 t is a
   // Restricted Access Vehicle and needs a permit or an order (notice).
   api.permit = function (v) {
+    if (v.type === 'car') return { level: 'none', title: 'No permit needed', items: ['Car: heavy vehicle networks, permits and curfews don\'t apply.'], basis: 'confirmed' };
     const L = C.limits, d = api.dims(v), net = RR.net(v.net), k = net.key;
     const over = [];
     if (d.width > L.width) over.push(`${d.width} m wide (limit ${L.width} m)`);

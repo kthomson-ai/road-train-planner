@@ -357,3 +357,7 @@ body.driving #junc.far { display: none; }
 body.driving.cam3d #map { touch-action: none; }
 /* the planning-screen location dot is hidden while driving: the driving marker shows where you are */
 body.driving .rr-me { display: none; }
+
+/* car mode: hide heavy vehicle inputs */
+body.carmode .truck-only, body.carmode #swapRetWrap, body.carmode #fatChip { display: none !important; }
+body.ve-car .ve-truck { display: none !important; }

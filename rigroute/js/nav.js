@@ -20,7 +20,7 @@ const NAV = (() => {
   }
   const ABBR = [[/\bHwy\b/g, 'Highway'], [/\bGNH\b/g, 'Great Northern Highway'], [/\bRd\b/g, 'Road'], [/\bSt\b/g, 'Street'], [/\bDr\b/g, 'Drive'], [/\bAve?\b/g, 'Avenue'], [/\bPde\b/g, 'Parade'], [/\bTce\b/g, 'Terrace'], [/\bCres\b/g, 'Crescent'], [/\bPl\b/g, 'Place'], [/\bCt\b/g, 'Court'], [/\bBvd\b/g, 'Boulevard'], [/\bWy\b/g, 'Way'], [/\bRty\b/g, 'roundabout'], [/\bNth\b/g, 'North'], [/\bSth\b/g, 'South'], [/\bMt\b/g, 'Mount'], [/\s*\((North|South|East|West)bound\)/gi, ''], [/ - /g, ' ']];
   const speakName = n => { let s = n || 'the road'; for (const [re, r] of ABBR) s = s.replace(re, r); s = s.replace(/\boff to\b/i, 'exit to').replace(/\bon to\b/i, 'ramp to'); return s; };
-  const speakInstr = st => { if (st.stop) return `arrive at stop ${st.stop}, ${speakName(st.name)}`; const verb = st.instr.replace(/ onto$/, '').replace(/^Leave on$/, 'Head off'); return `${verb} onto ${speakName(st.name)}`; };
+  const speakInstr = st => { if (st.stop) return `arrive at stop ${st.stop}, ${speakName(st.name)}`; if (!st.name) return st.instr; if (/ towards$/.test(st.instr)) return `${st.instr} ${speakName(st.name)}`; const verb = st.instr.replace(/ onto$/, '').replace(/^Leave on$/, 'Head off'); return `${verb} onto ${speakName(st.name)}`; };
   const speakDist = m => m >= 950 ? `In ${m >= 9500 ? Math.round(m / 1000) : (Math.round(m / 500) / 2).toString()} kilometres` : `In ${m >= 300 ? Math.round(m / 100) * 100 : Math.max(50, Math.round(m / 50) * 50)} metres`;
 
   // ---- state ----
@@ -173,7 +173,7 @@ const NAV = (() => {
     try { RR.emit('navfix', { pt, speed, acc, along, off, t: Date.now() }); } catch { }
     const total = cum[cum.length - 1], remain = Math.max(0, total - along);
     // off route?
-    if (off > Math.max(80, (acc || 0) * 1.5)) { if (++offCount >= 3 && !rerouting) return reroute(pt); } else offCount = 0;
+    if (off > Math.max(80, (acc || 0) * 1.5)) { if (++offCount >= 3 && !rerouting && Date.now() > retryAt) return reroute(pt); } else offCount = 0;
     // next maneuver
     const next = man.find(m => m.d > along - 5);
     updateBearing(pt, along, off, heading, vEma);
@@ -212,12 +212,15 @@ const NAV = (() => {
     ui.instr.textContent = endInfo ? 'End of approved route. ' + endInfo : 'Arrived'; ui.arrow.textContent = '⚑'; ui.dist.textContent = '';
     stopTracking();
   }
+  let retryAt = 0; // after a failed reroute (e.g. no signal for the car routing service) wait before trying again
   async function reroute(pt) {
-    rerouting = true; say('Off route. Finding a new legal route.', true); flash('Off route, rerouting on approved roads…');
+    rerouting = true; say(opts.car ? 'Off route. Finding a new route.' : 'Off route. Finding a new legal route.', true); flash(opts.car ? 'Off route, rerouting…' : 'Off route, rerouting on approved roads…');
     await new Promise(r => setTimeout(r, 30));
-    const r = opts.reroute(pt, reachedStop);
+    let r; try { r = await opts.reroute(pt, reachedStop); } catch (e) { r = { error: e.message }; }
+    if (!active) { rerouting = false; return; }
     rerouting = false; offCount = 0;
     if (r && !r.error) { prepare(r); opts.drawRoute(r); say(`New route. ${fmtKm(r.total).replace('km', 'kilometres')} to go.`); }
+    else if (opts.car) { retryAt = Date.now() + 30000; say('I couldn\'t get a new route. Head back to the route when you can.'); flash('No new route yet (no signal?). Return to the lime line; I\'ll try again.'); }
     else { say('Could not find a legal route from here. Head back to the approved route.'); flash('No legal route from here. Return to the approved route (lime line).'); }
   }
 

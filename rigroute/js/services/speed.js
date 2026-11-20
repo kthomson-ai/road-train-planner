@@ -65,7 +65,7 @@ RR.speed = (() => {
     // the 50 m samples aren't exactly even, so settle on the nearest by distance
     let k = i; while (k > 0 && S.cum[k] > along) k--; while (k < S.P.length - 1 && S.cum[k + 1] <= along) k++;
     const posted = S.posted[k] || 0, net = S.net[k] || 0;
-    const m = vehicle ? RR.vehicles.dims(vehicle).mass : 0, heavy = !m || m > 12;
+    const m = vehicle ? RR.vehicles.dims(vehicle).mass : 0, heavy = !(vehicle && vehicle.type === 'car') && (!m || m > 12);
     let limit = posted, why = '';
     if (heavy && (!limit || limit > HV_CAP) && posted) { limit = Math.min(posted, HV_CAP); if (posted > HV_CAP) why = 'Heavy vehicle limit'; }
     if (net && (!limit || net < limit)) { limit = net; why = 'Network condition'; }

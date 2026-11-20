@@ -8,7 +8,9 @@ RR.config = (() => {
       hvs: MR + 'HVS_Networks_DataPortal/MapServer/',
       assets: MR + 'RoadAssets_DataPortal/MapServer/',
       webeoc: 'https://services2.arcgis.com/cHGEnmsJ165IBJRM/arcgis/rest/services/',
-      nominatim: 'https://nominatim.openstreetmap.org/search'
+      nominatim: 'https://nominatim.openstreetmap.org/search',
+      // car routing: OSRM on OpenStreetMap data, run by FOSSGIS (max one request a second, no uptime promise)
+      osrm: 'https://routing.openstreetmap.de/routed-car/route/v1/driving/'
     },
     // Google Maps Platform demo key, restricted to kthomson-ai.github.io
     // shared driver reports + tester feedback (Supabase; public key, protected by row level security)
@@ -34,7 +36,9 @@ RR.config = (() => {
       { key: 'adouble', label: 'A-double', net: 'TD7', h: 4.3, w: 2.5, l: 36.5, axles: 11, trailer: 'Semi + dolly + semi' },
       { key: 'roadtrain', label: 'Road train (double)', net: 'TD7', h: 4.3, w: 2.5, l: 36.5, axles: 11, trailer: 'Double road train' },
       { key: 'triple', label: 'Road train (triple)', net: 'TD10', h: 4.3, w: 2.5, l: 53.5, axles: 15, trailer: 'Triple road train' },
-      { key: 'oversize', label: 'Oversize combination', net: 'OSL', h: 4.8, w: 4.0, l: 25, axles: 7, trailer: 'Low loader / float' }
+      { key: 'oversize', label: 'Oversize combination', net: 'OSL', h: 4.8, w: 4.0, l: 25, axles: 7, trailer: 'Low loader / float' },
+      // light vehicle: ordinary navigation, none of the heavy vehicle rules
+      { key: 'car', label: 'Car', net: 'GEN', h: 1.6, w: 1.9, l: 4.8, axles: 2, trailer: 'None' }
     ],
     // Perth and Fremantle Central Zones, traced from the Main Roads permit appendix maps (approximate)
     zones: [
