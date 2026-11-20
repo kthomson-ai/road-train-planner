@@ -9,22 +9,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="img/favicon-64.png?v=26">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=26">
+<link rel="icon" href="img/favicon-64.png?v=27">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=27">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="js/vendor/leaflet.css">
-<link rel="stylesheet" href="css/rigroute.css?v=26">
+<link rel="stylesheet" href="css/rigroute.css?v=27">
 </head>
 <body>
-<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=26" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
+<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=27" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
 
 <div id="map" aria-label="Map"></div>
 
 <!-- top: search + vehicle -->
 <div class="topbar">
   <div class="search">
-    <img src="img/logo-mark.png?v=26" alt="RigRoute">
+    <img src="img/logo-mark.png?v=27" alt="RigRoute">
     <input id="q" type="search" placeholder="Where to?" autocomplete="off" enterkeyhint="search" aria-label="Search destination">
     <button class="vchip" id="vchip" aria-label="Change vehicle"><span class="vi" data-icon="truck"></span><div><b id="vchipName">Vehicle</b><small id="vchipSub"></small></div></button>
   </div>
@@ -198,6 +198,7 @@
   <div class="body">
     <div id="vehList"></div>
     <button class="btn block" id="vehAdd"><span data-icon="plus"></span>Add vehicle</button>
+    <div class="field" style="margin-top:14px"><label>Map icon while driving</label><div class="seg" id="markerSeg"><button data-m="arrow">Arrow</button><button data-m="truck">Truck</button><button data-m="car">Car</button><button data-m="van">Van</button></div></div>
     <div class="card" style="margin-top:16px">
       <h3>Fatigue</h3>
       <div id="fatStatus" class="hint" style="margin:0 0 8px"></div>
@@ -224,7 +225,6 @@
       <label class="toggle"><span><b>Speeding alert</b><small>Speed turns red and the voice warns when you're over the limit</small></span><span class="switch"><input type="checkbox" id="setSpeedWarn" checked><i></i></span></label>
       <button class="btn block" id="setVoiceTest"><span data-icon="volume"></span>Test voice</button>
       <div class="field" style="margin-top:14px"><label>Appearance</label><div class="seg" id="themeSeg2"><button data-theme="auto">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div></div>
-      <div class="field" style="margin-top:14px"><label>Your position while driving</label><div class="seg" id="markerSeg"><button data-m="arrow">Arrow</button><button data-m="truck">Truck</button><button data-m="car">Car</button><button data-m="van">Van</button></div></div>
       <label class="toggle"><span><b>Show approved network</b><small>For the selected vehicle</small></span><span class="switch"><input type="checkbox" id="setNet" checked><i></i></span></label>
       <div class="toggle" style="cursor:default"><span><b>Map data</b><small id="dataInfo">Loading…</small></span><button class="btn" id="refresh" style="height:40px">Refresh</button></div>
       <div class="hint" id="offlineInfo" style="margin:8px 0 0"></div>
@@ -290,7 +290,7 @@
 <div id="netpill" hidden><span data-icon="alert"></span><span id="netText">No signal: navigation still works</span></div>
 <div id="disclaimer" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="dcTitle">
   <div class="mbox">
-    <img src="img/logo-pin.png?v=26" alt="" style="width:56px;height:56px">
+    <img src="img/logo-pin.png?v=27" alt="" style="width:56px;height:56px">
     <h2 id="dcTitle">Before you drive</h2>
     <p>RigRoute is a <b>planning aid</b>. It uses Main Roads WA network and live data, but data can be incomplete or out of date.</p>
     <ul>
@@ -308,23 +308,23 @@
 
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/Leaflet.GoogleMutant.js"></script>
-<script src="js/core.js?v=26"></script>
-<script src="js/nav.js?v=26"></script>
-<script src="js/services/config.js?v=26"></script>
-<script src="js/services/store.js?v=26"></script>
-<script src="js/services/mainroads.js?v=26"></script>
-<script src="js/services/google.js?v=26"></script>
-<script src="js/services/vehicles.js?v=26"></script>
-<script src="js/services/routing.js?v=26"></script>
-<script src="js/services/speed.js?v=26"></script>
-<script src="js/services/trip.js?v=26"></script>
-<script src="js/services/shared.js?v=26"></script>
-<script src="js/services/places.js?v=26"></script>
-<script src="js/services/alerts.js?v=26"></script>
-<script src="js/services/reports.js?v=26"></script>
-<script src="js/ui/icons.js?v=26"></script>
-<script src="js/ui/theme.js?v=26"></script>
-<script src="js/ui/map.js?v=26"></script>
-<script src="js/ui/app.js?v=26"></script>
+<script src="js/core.js?v=27"></script>
+<script src="js/nav.js?v=27"></script>
+<script src="js/services/config.js?v=27"></script>
+<script src="js/services/store.js?v=27"></script>
+<script src="js/services/mainroads.js?v=27"></script>
+<script src="js/services/google.js?v=27"></script>
+<script src="js/services/vehicles.js?v=27"></script>
+<script src="js/services/routing.js?v=27"></script>
+<script src="js/services/speed.js?v=27"></script>
+<script src="js/services/trip.js?v=27"></script>
+<script src="js/services/shared.js?v=27"></script>
+<script src="js/services/places.js?v=27"></script>
+<script src="js/services/alerts.js?v=27"></script>
+<script src="js/services/reports.js?v=27"></script>
+<script src="js/ui/icons.js?v=27"></script>
+<script src="js/ui/theme.js?v=27"></script>
+<script src="js/ui/map.js?v=27"></script>
+<script src="js/ui/app.js?v=27"></script>
 </body>
 </html>
