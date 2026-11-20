@@ -309,7 +309,7 @@
     const endInfo = r.t.d > 300 ? `Your destination is ${fmtKm(r.t.d)} further, off the approved network.` : null;
     const ok = NAV.start(r, {
       map: RR.map.get(), arrow: ARROW, net: RR.net(app.PROF.net).short, endInfo, destName: destOf(r).label.split(',')[0], follow: () => follow, simSpeed: () => 1,
-      ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel'), name: $('jName') } },
+      ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { el: $('junc'), svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel'), name: $('jName') } },
       graph: () => RR.routing.currentGraph(),
       reroute: (pt, reached) => { if (r.swap) { const nr = RR.routing.rerouteSwap(r, pt, Math.max(reached, app.reached || 0)); if (nr && !nr.error) { const offNet = nr.s && nr.s.d > 120; if (offNet) { nr.conf.gaps = [{ ...nr.s, req: pt }]; setTimeout(() => wrongTurnWarning(nr), 2600); } else nr.conf.gaps = nr.conf.gaps.filter(g => g !== nr.s); app.RES.routes[app.sel] = nr; app.RUN = nr.run; } return nr; }
         const run = app.RUN; const stops = run.pts.slice(1, -1), labs = run.labels.slice(1, -1); const G = RR.routing.currentGraph(); const nr = RR.routing.reroute(G, [pt, ...stops.slice(reached), run.pts[run.pts.length - 1]], ['Current position', ...labs.slice(reached), run.labels[run.labels.length - 1]], reached + 1); if (nr && !nr.error) {
@@ -342,6 +342,9 @@
   const paint3d = () => { $('n3d').textContent = NAV.view3d() ? '2D' : '3D'; };
   $('n3d').onclick = () => { NAV.setView3d(!NAV.view3d()); paint3d(); toast(NAV.view3d() ? '3D view: map turns with you.' : 'Flat view: north up.'); };
   paint3d();
+  // marker for your position while driving (Profile > Settings)
+  const paintMarker = () => $('markerSeg').querySelectorAll('[data-m]').forEach(b => { b.classList.toggle('on', b.dataset.m === NAV.marker()); b.onclick = () => { NAV.setMarker(b.dataset.m); paintMarker(); }; });
+  paintMarker();
   setTimeout(() => RR.map.get().on('dragstart', () => NAV.isActive() && setFollow(false)), 0);
   let muted = false; $('nMute').onclick = () => { muted = !muted; NAV.setMuted(muted); $('nMute').textContent = muted ? '🔇' : '🔊'; };
 

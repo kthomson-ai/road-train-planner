@@ -133,7 +133,16 @@ const NAV = (() => {
     brg = (brg + d * k + 360) % 360; rot += d * k;
   }
   function setView3d(on) { view3d = !!on; try { localStorage.setItem('rr.view3d', on ? '1' : '0'); } catch { } if (!on) cam3d(false); autoZ = null; refresh(); }
-  const arrowIcon = () => L.divIcon({ className: 'rr-navarrow', iconSize: [48, 48], iconAnchor: [24, 24], html: '<div class="rr-arr"><svg viewBox="-24 -24 48 48"><circle r="22" fill="rgba(54,165,245,.2)"/><path d="M0 -17 L13 15 L0 8 L-13 15 Z" fill="#36A5F5" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>' });
+  // map marker for your position: all drawn top-down, front at the top, so they turn with the direction of travel
+  const MARKERS = {
+    arrow: { w: 48, h: 48, svg: '<svg viewBox="-24 -24 48 48"><circle r="22" fill="rgba(54,165,245,.2)"/><path d="M0 -17 L13 15 L0 8 L-13 15 Z" fill="#36A5F5" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/></svg>' },
+    truck: { w: 34, h: 66, svg: '<svg viewBox="-17 -33 34 66"><rect x="-11" y="-6" width="22" height="37" rx="3" fill="#E9EEF2" stroke="#101418" stroke-width="2"/><path d="M-11 4H11M-11 14H11M-11 24H11" stroke="#9AA6B2" stroke-width="1.5"/><rect x="-10" y="-31" width="20" height="22" rx="5" fill="#B7F23D" stroke="#101418" stroke-width="2"/><path d="M-7 -27 Q0 -30 7 -27 L6 -21 Q0 -23 -6 -21 Z" fill="#101418"/><rect x="-13" y="-25" width="3" height="5" rx="1" fill="#101418"/><rect x="10" y="-25" width="3" height="5" rx="1" fill="#101418"/></svg>' },
+    car: { w: 30, h: 52, svg: '<svg viewBox="-15 -26 30 52"><rect x="-11" y="-23" width="22" height="46" rx="9" fill="#36A5F5" stroke="#fff" stroke-width="2.5"/><path d="M-8 -12 Q0 -16 8 -12 L7 -5 Q0 -7 -7 -5 Z" fill="#101418"/><path d="M-7 12 Q0 14 7 12 L8 17 Q0 20 -8 17 Z" fill="#101418"/><rect x="-6" y="-3" width="12" height="13" rx="3" fill="#2a86cc"/></svg>' },
+    van: { w: 32, h: 58, svg: '<svg viewBox="-16 -29 32 58"><rect x="-12" y="-26" width="24" height="52" rx="5" fill="#F2F4F6" stroke="#101418" stroke-width="2"/><path d="M-9 -19 Q0 -22 9 -19 L8 -12 Q0 -14 -8 -12 Z" fill="#101418"/><path d="M-8 -6V20M8 -6V20M-8 -6H8" stroke="#B7C1CA" stroke-width="1.5" fill="none"/><rect x="-14" y="-17" width="3" height="5" rx="1" fill="#101418"/><rect x="11" y="-17" width="3" height="5" rx="1" fill="#101418"/></svg>' }
+  };
+  let markerKind = (() => { try { const k = localStorage.getItem('rr.marker'); return MARKERS[k] ? k : 'arrow'; } catch { return 'arrow'; } })();
+  const arrowIcon = () => { const m = MARKERS[markerKind]; return L.divIcon({ className: 'rr-navarrow', iconSize: [m.w, m.h], iconAnchor: [m.w / 2, m.h / 2], html: `<div class="rr-arr" style="width:${m.w}px;height:${m.h}px">${m.svg}</div>` }); };
+  function setMarker(k) { if (!MARKERS[k]) return; markerKind = k; try { localStorage.setItem('rr.marker', k); } catch { } if (posMarker) { posMarker.setIcon(arrowIcon()); applyRot(); } }
 
   const fmtKm = m => m < 950 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(m < 20000 ? 1 : 0) + ' km';
   const fmtT = s => { const m = Math.round(s / 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'); };
@@ -204,6 +213,7 @@ const NAV = (() => {
   function slice(d0, d1) { const L = R.line, out = [pointAt(d0)]; for (let i = 0; i < L.length; i++) if (cum[i] > d0 && cum[i] < d1) out.push(L[i]); out.push(pointAt(d1)); return out; }
   function junction(m, dist) {
     const box = ui.junc; if (!box) return;
+    if (box.el) box.el.classList.toggle('far', dist > 1000); // the top banner covers it until the turn is close
     const key = m ? m.d.toFixed(0) : 'end';
     if (key !== jKey) { jKey = key; box.svg.innerHTML = m ? (m.step.stop ? stopSvg(m.step.stop) : junctionSvg(m)) : flagSvg(); }
     box.dist.textContent = fmtKm(Math.max(0, dist));
@@ -244,11 +254,22 @@ const NAV = (() => {
     if (!camHooked) {
       camHooked = true;
       map.on('zoomend', () => { if (!camMoving && active && autoZ != null && opts.follow() && !cam3dOn) zoomBias = Math.max(-3, Math.min(2, zoomBias + map.getZoom() - autoZ)); });
-      // dragging the tilted map: drop to the flat, north-up view so the driver can look around (Re-centre comes back)
-      const el = map.getContainer(); let g0 = null;
-      el.addEventListener('pointerdown', e => { g0 = cam3dOn ? [e.clientX, e.clientY] : null; }, { passive: true });
-      el.addEventListener('pointermove', e => { if (g0 && cam3dOn && Math.hypot(e.clientX - g0[0], e.clientY - g0[1]) > 14) { g0 = null; cam3d(false); opts.onFreeLook && opts.onFreeLook(); } }, { passive: true });
-      addEventListener('pointerup', () => { g0 = null; });
+      // on the tilted map: pinch zooms and keeps the map turned with you; a one-finger drag drops to the flat,
+      // north-up view so the driver can look around (Re-centre comes back)
+      const el = map.getContainer(), ptrs = new Map(); let drag0 = null, pinch0 = null;
+      const two = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+      el.addEventListener('pointerdown', e => {
+        if (!cam3dOn) return; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+        if (ptrs.size === 1) drag0 = [e.clientX, e.clientY];
+        else if (ptrs.size === 2) { drag0 = null; pinch0 = { d: Math.max(20, two()), bias: zoomBias }; }
+      }, { passive: true });
+      el.addEventListener('pointermove', e => {
+        if (!cam3dOn || !ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+        if (pinch0 && ptrs.size >= 2) { const nb = Math.max(-3, Math.min(2, pinch0.bias + Math.log2(two() / pinch0.d))); if (Math.abs(nb - zoomBias) >= 0.25) { zoomBias = nb; autoZ = null; refresh(); } return; }
+        if (drag0 && ptrs.size === 1 && Math.hypot(e.clientX - drag0[0], e.clientY - drag0[1]) > 30) { drag0 = null; ptrs.clear(); cam3d(false); opts.onFreeLook && opts.onFreeLook(); }
+      }, { passive: true });
+      const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = null; if (!ptrs.size) drag0 = null; };
+      addEventListener('pointerup', up); addEventListener('pointercancel', up);
       addEventListener('resize', () => { if (cam3dOn) { sizeCam(); camMoving = true; try { map.invalidateSize({ pan: false }); } finally { camMoving = false; } refresh(); } });
     }
     prepare(route); active = true; document.body.classList.add('driving');
@@ -271,7 +292,7 @@ const NAV = (() => {
   function stop() { cam3d(false); active = false; stopTracking(); try { speechSynthesis.cancel(); } catch { } try { lock && lock.release(); } catch { } lock = null; document.body.classList.remove('driving'); if (posMarker) map.removeLayer(posMarker); }
   function setMuted(m) { muted = m; if (m) try { speechSynthesis.cancel(); } catch { } }
   // test hook
-  return { start, stop, setMuted, setVoice, refresh, zoomBy, setView3d, view3d: () => view3d, is3d: () => cam3dOn, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
+  return { start, stop, setMuted, setVoice, refresh, zoomBy, setView3d, setMarker, marker: () => markerKind, view3d: () => view3d, is3d: () => cam3dOn, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
 })();
 
 // ---- voice input for address boxes ----

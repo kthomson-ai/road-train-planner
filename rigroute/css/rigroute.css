@@ -349,3 +349,9 @@ body.driving.cam3d.cam3d-live #map { transition: transform .9s linear; }
 body.driving #camFabs { display: flex; flex-direction: column; gap: 8px; position: fixed; right: 12px; top: calc(162px + var(--safe-t)); z-index: 49; }
 #camFabs button { width: 48px; height: 48px; border-radius: 14px; border: 1px solid var(--line2); background: var(--surface); color: var(--text); font: 800 22px/1 var(--display); box-shadow: var(--shadow); cursor: pointer; }
 #camFabs #n3d { font-size: 14px; }
+/* the turn box only appears near the turn, and shows just the picture and a countdown bar (the top banner has the words) */
+body.driving #junc.far { display: none; }
+#junc .jl, #junc .jn, #junc .jd { display: none; }
+#junc .jbar { height: 8px; }
+/* the tilted map handles its own pinch, so stop the browser zooming the page */
+body.driving.cam3d #map { touch-action: none; }
