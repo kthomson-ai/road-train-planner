@@ -15,9 +15,33 @@ RR.routing = (() => {
     state.buildMs = performance.now() - t0;
     return state;
   }
+  // A stop off the approved network (a fuel station in town, a depot) would otherwise only get a straight red
+  // line from the nearest approved road. Load the local streets around it so the driver gets real directions for
+  // the last stretch; those streets are tagged, penalised so they're only used to reach the stop, and flagged.
+  const OFFNET_M = 150, LOCAL_KM = 1.5;
+  const LOCAL_COND = 'Local road, not on the approved network for this vehicle. Check access and signs before entering.';
+  async function rasGraphFor(pts, onStatus) {
+    const off = pts.filter(p => { const s = RAV.snap(state.base, p, 50000); return !s || s.d > OFFNET_M; });
+    if (!off.length) return state.base;
+    const key = state.key + '|L|' + off.map(p => p[0].toFixed(4) + p[1].toFixed(4)).join('|');
+    if (state.local.key === key) return state.local.g;
+    onStatus && onStatus('Loading local streets to reach your stop…');
+    const extra = [], seen = new Set();
+    for (const p of off) for (const f of await RR.mainroads.localRoads(p).catch(() => [])) {
+      const g = f.geometry; if (!g) continue;
+      const lines = g.type === 'MultiLineString' ? g.coordinates : [g.coordinates];
+      if (!lines.some(L => L.some(c => hav(c, p) < LOCAL_KM * 1000))) continue;
+      const id = (f.properties.ROAD || '') + JSON.stringify(lines[0][0]); if (seen.has(id)) continue; seen.add(id);
+      extra.push({ ...f, properties: { ...f.properties, _local: true, _cond: false, CONDITION: LOCAL_COND } }); // copy: the cached feature is shared
+    }
+    if (!extra.length) return state.base; // no signal: keep the approved network only
+    onStatus && onStatus('Building road graph…'); await new Promise(r => setTimeout(r, 15));
+    state.local = { key, g: RAV.build(state.data.lines.concat(extra), state.data.ints, state.data.br) };
+    return state.local.g;
+  }
   // general access: add local streets around each point
   async function graphFor(pts, onStatus) {
-    if (!state.data.general) return state.base;
+    if (!state.data.general) return rasGraphFor(pts, onStatus);
     onStatus && onStatus('Loading local streets around your stops…');
     const extra = []; for (const p of pts) extra.push(...await RR.mainroads.localRoads(p));
     const key = state.key + pts.map(p => p[0].toFixed(3) + p[1].toFixed(3)).join('|');
@@ -64,7 +88,7 @@ RR.routing = (() => {
     blockClosures(G, r);
     // preferences as soft penalties
     const pen = new Map();
-    if (prefs.avoidUnsealed || prefs.preferHighways) G.E.forEach((e, ei) => { const f = e.f >= 0 ? G.feats[e.f] : null; if (!f) return; let m = 1; if (prefs.avoidUnsealed && (f.unsealed || /unsealed/i.test(f.name))) m *= 4; if (prefs.preferHighways && !f.state && !(f.speed >= 80)) m *= 1.3; if (m > 1) pen.set(ei, m); });
+    G.E.forEach((e, ei) => { const f = e.f >= 0 ? G.feats[e.f] : null; if (!f) return; let m = 1; if (f.local) m *= 8; if (prefs.avoidUnsealed && (f.unsealed || /unsealed/i.test(f.name))) m *= 4; if (prefs.preferHighways && !f.state && !(f.speed >= 80)) m *= 1.3; if (m > 1) pen.set(ei, m); });
     r.pen = pen;
     state.restr = r; state.restrKey = key; state.restrG = G; return r;
   }
@@ -74,7 +98,7 @@ RR.routing = (() => {
     const seg = { confirmed: 0, conditional: 0, general: 0, unverified: 0 }, parts = [];
     for (const lg of route.legs2 || [route]) for (const L of lg.legs || []) {
       const f = G.E[L.ei].f >= 0 ? G.feats[G.E[L.ei].f] : null;
-      const cls = !f ? 'confirmed' : f.conds.length ? 'conditional' : (state.data.general && f.speed && f.speed <= 40) ? 'general' : 'confirmed';
+      const cls = !f ? 'confirmed' : f.local ? 'unverified' : f.conds.length ? 'conditional' : (state.data.general && f.speed && f.speed <= 40) ? 'general' : 'confirmed';
       seg[cls] += L.len; parts.push({ cls, pts: L.pts });
     }
     const gaps = [];
@@ -132,6 +156,20 @@ RR.routing = (() => {
     return { routes, restr, G, ms };
   }
   function reroute(G, pts, labels, firstStopNo) { const r = state.restr; return RAV.routeVia(G, pts, labels, firstStopNo, { blocked: r && r.blocked, slow: r && r.slow, pen: r && r.pen }); }
+  // the graph the current restrictions were built on (reroutes must use this one: edge numbers differ per graph)
+  const currentGraph = () => state.restrG || state.base;
+  // route through a new list of points while driving (e.g. a stop added on the way): loads local streets around
+  // any point that's off the approved network, rebuilds restrictions for that graph, and rates the result
+  async function routeStops({ pts, labels, firstStopNo = 1, profile, prefs = {}, onStatus }) {
+    const G = await graphFor(pts, onStatus);
+    restrictions(G, profile, pts, prefs);
+    const r = reroute(G, pts, labels, firstStopNo); if (!r || r.error) return r;
+    r.conf = confidence(G, r);
+    const ends = [r.s, ...(r.legs2 || []).slice(0, -1).map(l => l.t), r.t];
+    r.conf.gaps.forEach(g => { const i = ends.indexOf(g); g.req = pts[i >= 0 ? i : pts.length - 1]; });
+    r.along = alongRoute(r); r.trueSecs = RAV.routeSecs(G, r);
+    return r;
+  }
   // ---------- road train assembly area swap ----------
   // The big combination drives to an RTAA on its own network, drops trailers, and the smaller vehicle carries on
   // to the destination on its network. Tries the most promising assembly areas and keeps the quickest.
@@ -230,5 +268,5 @@ RR.routing = (() => {
   }
   // which vehicle the driver is in after passing `reached` stops
   const swapVehicle = (route, reached) => (route.allSegs[Math.min(reached, route.allSegs.length - 1)] || {}).veh === 2 ? swapCtx && swapCtx.profile2 : swapCtx && swapCtx.profile;
-  return { state, prepare, plan, reroute, alongRoute, closuresBlocking, restrictions, planSwap, rerouteSwap, swapVehicle, bridgeRule };
+  return { state, prepare, plan, reroute, routeStops, currentGraph, alongRoute, closuresBlocking, restrictions, planSwap, rerouteSwap, swapVehicle, bridgeRule };
 })();

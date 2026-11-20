@@ -60,15 +60,41 @@ const NAV = (() => {
     return { off: bd, along: lastAlong };
   }
 
+  // ---- camera: close-in, speed-based zoom with the road ahead in view ----
+  // Zoom 17 is about 450 m across a phone screen, 15.5 about 1.3 km. Closer for turns; a pinch-zoom by the
+  // driver is kept as an offset for the rest of the session (it survives reroutes and added stops).
+  let vEma = null, zoomBias = 0, autoZ = null, camMoving = false, camHooked = false;
+  function targetZoom(distToTurn) {
+    const kmh = (vEma || 0) * 3.6;
+    let z = kmh < 25 ? 17.5 : kmh < 50 ? 17 : kmh < 75 ? 16.5 : kmh < 95 ? 16 : 15.5;
+    if (distToTurn != null && distToTurn < 700) z = Math.max(z, 17);
+    return Math.round(Math.max(13, Math.min(18.5, z + zoomBias)) * 2) / 2;
+  }
+  function camera(pt, along, off, distToTurn) {
+    let z = targetZoom(distToTurn);
+    if (autoZ != null && Math.abs(z - autoZ) < 0.5) z = autoZ; // no flicker on small speed changes
+    autoZ = z;
+    let c = [pt[1], pt[0]];
+    if (off < 60) { // look ahead along the route so the truck sits below the middle of the screen
+      const sz = map.getSize(), mpp = 156543.03 * Math.cos(pt[1] * D2R) / Math.pow(2, z);
+      const a = pointAt(along + 0.22 * Math.min(sz.x, sz.y) * mpp);
+      c = [a[1], a[0]];
+    }
+    camMoving = true; try { map.setView(c, z, { animate: false }); } finally { camMoving = false; }
+  }
+
   const fmtKm = m => m < 950 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(m < 20000 ? 1 : 0) + ' km';
   const fmtT = s => { const m = Math.round(s / 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'); };
 
   function onFix(lon, lat, acc, speed) {
     try { RR.emit('navpos', [lon, lat]); } catch { }
     if (!active || !R) return;
-    const pt = [lon, lat]; lastFix = { pt, acc, speed, t: Date.now() };
+    const pt = [lon, lat], now = Date.now();
+    // some phones report no speed: work it out from the last fix
+    let v0 = speed; if ((v0 == null || isNaN(v0)) && lastFix) { const dt = (now - lastFix.t) / 1000; if (dt > 0.5 && dt < 30) v0 = hav(lastFix.pt, pt) / dt; }
+    if (v0 != null && !isNaN(v0)) vEma = vEma == null ? v0 : vEma * 0.7 + v0 * 0.3;
+    lastFix = { pt, acc, speed, t: now };
     posMarker.setLatLng([lat, lon]);
-    if (opts.follow()) map.setView([lat, lon], Math.max(map.getZoom(), 14), { animate: false });
     const { off, along } = locate(pt);
     try { RR.emit('navfix', { pt, speed, acc, along, off, t: Date.now() }); } catch { }
     const total = cum[cum.length - 1], remain = Math.max(0, total - along);
@@ -76,6 +102,7 @@ const NAV = (() => {
     if (off > Math.max(80, (acc || 0) * 1.5)) { if (++offCount >= 3 && !rerouting) return reroute(pt); } else offCount = 0;
     // next maneuver
     const next = man.find(m => m.d > along - 5);
+    if (opts.follow()) camera(pt, along, off, next ? next.d - along : null);
     const v = speed && speed > 2 ? speed : 22; // m/s, ~80 km/h default
     if (next) {
       const dist = next.d - along;
@@ -160,6 +187,8 @@ const NAV = (() => {
 
   function start(route, o, demo) {
     opts = o; ui = o.ui; map = o.map; endInfo = o.endInfo || null; reachedStop = 0; jKey = null;
+    vEma = null; autoZ = null; lastFix = null;
+    if (!camHooked) { camHooked = true; map.on('zoomend', () => { if (!camMoving && active && autoZ != null && opts.follow()) zoomBias = Math.max(-3, Math.min(2, zoomBias + map.getZoom() - autoZ)); }); }
     prepare(route); active = true; document.body.classList.add('driving');
     if (!posMarker) posMarker = L.circleMarker([route.line[0][1], route.line[0][0]], { radius: 9, color: '#fff', weight: 3, fillColor: '#36A5F5', fillOpacity: 1 }).addTo(map); else posMarker.addTo(map);
     keepAwake();

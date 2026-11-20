@@ -310,9 +310,9 @@
     const ok = NAV.start(r, {
       map: RR.map.get(), arrow: ARROW, net: RR.net(app.PROF.net).short, endInfo, destName: destOf(r).label.split(',')[0], follow: () => follow, simSpeed: () => 1,
       ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel'), name: $('jName') } },
-      graph: () => S.data.general ? S.local.g || S.base : S.base,
+      graph: () => RR.routing.currentGraph(),
       reroute: (pt, reached) => { if (r.swap) { const nr = RR.routing.rerouteSwap(r, pt, Math.max(reached, app.reached || 0)); if (nr && !nr.error) { const offNet = nr.s && nr.s.d > 120; if (offNet) { nr.conf.gaps = [{ ...nr.s, req: pt }]; setTimeout(() => wrongTurnWarning(nr), 2600); } else nr.conf.gaps = nr.conf.gaps.filter(g => g !== nr.s); app.RES.routes[app.sel] = nr; app.RUN = nr.run; } return nr; }
-        const run = app.RUN; const stops = run.pts.slice(1, -1), labs = run.labels.slice(1, -1); const G = S.data.general ? S.local.g || S.base : S.base; const nr = RR.routing.reroute(G, [pt, ...stops.slice(reached), run.pts[run.pts.length - 1]], ['Current position', ...labs.slice(reached), run.labels[run.labels.length - 1]], reached + 1); if (nr && !nr.error) {
+        const run = app.RUN; const stops = run.pts.slice(1, -1), labs = run.labels.slice(1, -1); const G = RR.routing.currentGraph(); const nr = RR.routing.reroute(G, [pt, ...stops.slice(reached), run.pts[run.pts.length - 1]], ['Current position', ...labs.slice(reached), run.labels[run.labels.length - 1]], reached + 1); if (nr && !nr.error) {
           const offNet = nr.s && nr.s.d > 120;
           app.RES.routes[app.sel] = Object.assign(nr, { conf: { ...r.conf, gaps: offNet ? [{ ...nr.s, req: pt }] : [] }, along: RR.routing.alongRoute(nr), tight: r.tight, zones: r.zones, label: r.label });
           if (offNet) setTimeout(() => wrongTurnWarning(nr), 2600);
@@ -613,24 +613,27 @@
   $('asQ').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('asGo').click(); } });
   $('asMic').onclick = () => VOICE.supported ? VOICE.listen(t => { $('asQ').value = t; $('asGo').click(); }, () => { }) : toast('Voice input isn\'t available in this browser.');
   // reroute: current position -> new stop -> remaining stops -> destination, and keep driving
-  function insertStop(f) {
-    const h = hereOnRoute(); if (!h) return;
+  let inserting = false;
+  async function insertStop(f) {
+    const h = hereOnRoute(); if (!h || inserting) return;
     if (h.r.swap) { openSheet(null); NAV._say('Adding a stop is not available on an assembly area trip yet.'); return toast('Adding stops isn\'t available on an assembly-area trip yet. Head there and plan again from that point.', 7000); }
     const run = app.RUN, done = app.reached || 0;
     const restPts = run.pts.slice(1 + done, -1), restLabs = run.labels.slice(1 + done, -1);
     const pts = [h.pos, f.at, ...restPts, run.pts[run.pts.length - 1]], labels = ['Current position', f.name, ...restLabs, run.labels[run.labels.length - 1]];
-    const G = S.data.general ? S.local.g || S.base : S.base;
-    const nr = RR.routing.reroute(G, pts, labels, 1);
+    inserting = true; toast(`Finding a route via ${f.name.split(',')[0]}…`, 8000);
+    let nr; try { nr = await RR.routing.routeStops({ pts, labels, firstStopNo: 1, profile: app.PROF, prefs: app.PREFS || {} }); } catch (e) { nr = { error: e.message }; } finally { inserting = false; }
     if (!nr || nr.error) return toast(`Couldn't find a legal route via ${f.name} for this vehicle.`, 5000);
     const prev = { run: app.RUN, route: app.RES.routes[app.sel] };
     const old = prev.route;
-    nr.conf = old.conf; nr.tight = old.tight; nr.zones = old.zones; nr.metro = old.metro; nr.label = old.label; nr.along = RR.routing.alongRoute(nr);
+    const dims = RR.vehicles.dims(app.PROF);
+    nr.tight = RAV.tightStructures(nr.line, { structures: S.structures }, dims.height); nr.zones = RAV.zonesOnRoute(nr.line, RR.config.zones); nr.metro = old.metro; nr.label = old.label;
+    const localM = nr.conf.parts.filter(p => p.cls === 'unverified').reduce((m, p) => m + p.pts.reduce((a, c, i) => i ? a + RAV.hav(p.pts[i - 1], c) : 0, 0), 0);
     const extra = (nr.trueSecs || nr.secs) - ((old.trueSecs || old.secs) * Math.max(0, 1 - h.here / (old.total || 1)));
     app.RUN = { ids: [], pts, labels }; app.RES.routes[app.sel] = nr;
-    openSheet(null); NAV.stop(); drive(app.demo);
+    openSheet(null); NAV.stop(); drive(app.demo); RR.map.drawRoutes([nr], 0);
     paintWaypoints2(pts, labels);
-    const mins = Math.max(1, Math.round(extra / 60)); NAV._say(`Stop added: ${f.name.split(',')[0]}. About ${mins} minute${mins > 1 ? 's' : ''} extra.`, true);
-    toastUndo(`Stop added: ${f.name.split(',')[0]} (+${Math.max(1, Math.round(extra / 60))} min)`, () => { app.RUN = prev.run; app.RES.routes[app.sel] = prev.route; NAV.stop(); drive(app.demo); });
+    const mins = Math.max(1, Math.round(extra / 60)); NAV._say(`Stop added: ${f.name.split(',')[0]}. About ${mins} minute${mins > 1 ? 's' : ''} extra.${localM > 50 ? ` The last ${fmtKm(localM).replace('km', 'kilometres').replace(' m', ' metres')} is on local roads that aren't on your approved network. Check access.` : ''}`, true);
+    toastUndo(`Stop added: ${f.name.split(',')[0]} (+${Math.max(1, Math.round(extra / 60))} min)`, () => { app.RUN = prev.run; app.RES.routes[app.sel] = prev.route; NAV.stop(); drive(app.demo); RR.map.drawRoutes([prev.route], 0); paintWaypoints2(prev.run.pts, prev.run.labels); });
   }
   function paintWaypoints2(pts, labels) { RR.map.setWaypoints(pts.map((p, i) => ({ lon: p[0], lat: p[1], kind: i === 0 ? 'start' : i === pts.length - 1 ? 'end' : 'stop', n: i > 0 && i < pts.length - 1 ? i : '' })).slice(1)); }
 
@@ -751,14 +754,14 @@
     if (h.r.swap) { const nr = RR.routing.rerouteSwap(h.r, h.pos, app.reached || 0, true); if (!nr || nr.error) { NAV._say('I couldn\'t find a legal way around the closure for this vehicle. Check the detour signs.', true); return toast('No legal detour found for this vehicle. Follow the signed detour and check your permit.', 7000); } app.RES.routes[app.sel] = nr; app.RUN = nr.run; NAV.stop(); drive(app.demo); return NAV._say(`New route avoids the closure. ${fmtKm(nr.total).replace('km', 'kilometres')} to go.`, true); }
     const run = app.RUN, done = app.reached || 0;
     const pts = [h.pos, ...run.pts.slice(1 + done)], labels = ['Current position', ...run.labels.slice(1 + done)];
-    const G = S.data.general ? S.local.g || S.base : S.base;
+    const G = RR.routing.currentGraph();
     RR.routing.restrictions(G, app.PROF, pts, app.PREFS || {});
     const nr = RR.routing.reroute(G, pts, labels, 1);
     if (!nr || nr.error) { NAV._say('I couldn\'t find a legal way around the closure for this vehicle. Check the detour signs.', true); return toast('No legal detour found for this vehicle. Follow the signed detour and check your permit.', 7000); }
     const old = app.RES.routes[app.sel];
     Object.assign(nr, { conf: old.conf, tight: old.tight, zones: old.zones, metro: old.metro, label: old.label }); nr.along = RR.routing.alongRoute(nr);
     app.RUN = { ids: [], pts, labels }; app.RES.routes[app.sel] = nr;
-    NAV.stop(); drive(app.demo);
+    NAV.stop(); drive(app.demo); RR.map.drawRoutes([nr], 0);
     NAV._say(`New route avoids the closure. ${fmtKm(nr.total).replace('km', 'kilometres')} to go.`, true);
   };
 
@@ -823,12 +826,12 @@
     $('offlineInfo').innerHTML = `<b>Ready for no signal:</b> ${[tick(n, `${RR.net(v.net).short} roads`), tick(st, 'low bridges'), tick((S.facilities || []).length, 'rest areas & roadhouses'), tick(lo, `${RR.places.towns().length.toLocaleString()} WA towns`), `${places} saved places`].join(' · ')}. Live alerts, address search beyond these, Google listings and the background map need signal.`;
   }
 
-  // ---------- safety notice (first launch, re-readable from Profile) ----------
+  // ---------- safety notice (every time the app opens, re-readable from Profile) ----------
   const DC_VER = 1;
   function showDisclaimer() { $('disclaimer').hidden = false; $('dcOk').focus(); }
   $('dcOk').onclick = () => { RR.store.set('disclaimerOk', DC_VER); $('disclaimer').hidden = true; };
   $('dcShow').onclick = showDisclaimer;
-  if (RR.store.get('disclaimerOk', 0) < DC_VER) setTimeout(showDisclaimer, 1100);
+  setTimeout(showDisclaimer, 1100);
 
 
   // Main Roads often names a roadhouse only by its road: add the nearest town so drivers know where it is

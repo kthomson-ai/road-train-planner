@@ -81,7 +81,10 @@ RR.map = (() => {
     const ll = r.line.map(c => [c[1], c[0]]);
     L.polyline(ll, { color: '#101418', weight: 11, opacity: 0.95 }).addTo(L_.routes);
     const main = L.polyline(ll, { color: '#B7F23D', weight: 6 }).addTo(L_.routes);
-    (r.conf ? r.conf.parts : []).forEach(p => { if (p.cls === 'conditional') L.polyline(p.pts.map(c => [c[1], c[0]]), { color: '#FFB020', weight: 4, dashArray: '2 8', opacity: 0.95 }).addTo(L_.routes); });
+    (r.conf ? r.conf.parts : []).forEach(p => {
+      if (p.cls === 'conditional') L.polyline(p.pts.map(c => [c[1], c[0]]), { color: '#FFB020', weight: 4, dashArray: '2 8', opacity: 0.95 }).addTo(L_.routes);
+      else if (p.cls === 'unverified') L.polyline(p.pts.map(c => [c[1], c[0]]), { color: '#F04444', weight: 5, dashArray: '6 8', opacity: 0.95 }).addTo(L_.routes).bindTooltip('Local road, not on the approved network for this vehicle: check access');
+    });
     (r.conf ? r.conf.gaps : []).forEach(sn => { const tgt = sn.req; if (!tgt) return; L.polyline([[tgt[1], tgt[0]], [sn.pt[1], sn.pt[0]]], { color: '#F04444', weight: 4, dashArray: '6 8' }).addTo(L_.routes).bindTooltip('Off the approved network: not verified for this vehicle'); });
     return main.getBounds();
   }

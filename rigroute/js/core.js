@@ -62,7 +62,7 @@ const RAV = (() => {
       if (p.MAX_SPEED && !conds.some(c => /speed/i.test(c))) conds.push('Max speed ' + stripHtml(String(p.MAX_SPEED)).join(' ') + (isNaN(ms) ? '' : ' km/h'));
       const hier = { 'Primary Distributor': 85, 'Regional Distributor': 80, 'Distributor A': 65, 'Distributor B': 55, 'Local Distributor': 50, 'Access Road': 40 }[p.ROAD_HIERARCHY];
       const fwy = /\b(fwy|freeway)\b/i.test(p.ROAD_NAME || '');
-      return { name: p.ROAD_NAME || 'Unnamed road', conds, notThrough: conds.some(c => NOT_THROUGH.test(c)), speed: (!isNaN(ms) && ms > 10 && ms < 120) ? ms : fwy ? 90 : (hier || null), state: /state/i.test(p.NETWORK_TYPE || ''), unsealed: conds.some(c => /unsealed/i.test(c)) };
+      return { name: p.ROAD_NAME || 'Unnamed road', conds, notThrough: conds.some(c => NOT_THROUGH.test(c)), speed: (!isNaN(ms) && ms > 10 && ms < 120) ? ms : fwy ? 90 : (hier || null), state: /state/i.test(p.NETWORK_TYPE || ''), unsealed: conds.some(c => /unsealed/i.test(c)), local: !!p._local };
     });
     features.forEach((f, fi) => {
       const g = f.geometry; if (!g) return;
