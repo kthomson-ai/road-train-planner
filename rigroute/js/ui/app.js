@@ -340,7 +340,7 @@
   const camZoom = d => { if (follow) NAV.zoomBy(d); else { const m = RR.map.get(); m.setZoom(m.getZoom() + d * 2); } };
   $('nZoomIn').onclick = () => camZoom(0.5); $('nZoomOut').onclick = () => camZoom(-0.5);
   const paint3d = () => { $('n3d').textContent = NAV.view3d() ? '2D' : '3D'; };
-  $('n3d').onclick = () => { NAV.setView3d(!NAV.view3d()); paint3d(); toast(NAV.view3d() ? '3D view: map turns with you.' : 'Flat view: north up.'); };
+  $('n3d').onclick = () => { NAV.setView3d(!NAV.view3d()); paint3d(); toast(NAV.view3d() ? '3D view: tilted, turns with you.' : 'Flat view: turns with you, no tilt.'); };
   paint3d();
   // marker for your position while driving (Profile > Settings)
   const paintMarker = () => $('markerSeg').querySelectorAll('[data-m]').forEach(b => { b.classList.toggle('on', b.dataset.m === NAV.marker()); b.onclick = () => { NAV.setMarker(b.dataset.m); paintMarker(); }; });

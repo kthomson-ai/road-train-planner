@@ -120,7 +120,7 @@ RR.map = (() => {
   }
   let meMarker = null;
   function setMe(lat, lon, acc) {
-    if (!meMarker) meMarker = L.marker([lat, lon], { zIndexOffset: 2000, icon: L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11], html: '<div style="width:22px;height:22px;border-radius:50%;background:#36A5F5;border:4px solid #fff;box-shadow:0 0 0 6px rgba(54,165,245,.25)"></div>' }) }).addTo(L_.me);
+    if (!meMarker) meMarker = L.marker([lat, lon], { zIndexOffset: 2000, icon: L.divIcon({ className: 'rr-me', iconSize: [22, 22], iconAnchor: [11, 11], html: '<div style="width:22px;height:22px;border-radius:50%;background:#36A5F5;border:4px solid #fff;box-shadow:0 0 0 6px rgba(54,165,245,.25)"></div>' }) }).addTo(L_.me);
     else meMarker.setLatLng([lat, lon]);
   }
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

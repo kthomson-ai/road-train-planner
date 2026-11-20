@@ -340,7 +340,7 @@ body.driving #navbar { padding-right: 62px; }
 #spdWhy { font-size: 9.5px; font-weight: 800; color: var(--muted); text-align: center; max-width: 70px; line-height: 1.1; text-transform: uppercase; }
 
 /* ---------- 3D heading-up driving view (sized and rotated from js/nav.js) ---------- */
-body.driving.cam3d #map { inset: auto; left: 50%; top: 50%; width: var(--camS); height: var(--camS); transform-origin: 50% 50%; transform: translate(-50%, -50%) perspective(var(--camP)) rotateX(45deg) rotate(var(--camRot, 0deg)); will-change: transform; }
+body.driving.cam3d #map { inset: auto; left: 50%; top: 50%; width: var(--camS); height: var(--camS); transform-origin: 50% 50%; transform: translate(-50%, -50%) perspective(var(--camP)) rotateX(var(--camTilt, 45deg)) rotate(var(--camRot, 0deg)); will-change: transform; }
 body.driving.cam3d.cam3d-live #map { transition: transform .9s linear; }
 .rr-navarrow { background: none; border: 0; }
 .rr-arr { width: 48px; height: 48px; transition: transform .9s linear; }
@@ -355,3 +355,5 @@ body.driving #junc.far { display: none; }
 #junc .jbar { height: 8px; }
 /* the tilted map handles its own pinch, so stop the browser zooming the page */
 body.driving.cam3d #map { touch-action: none; }
+/* the planning-screen location dot is hidden while driving: the driving marker shows where you are */
+body.driving .rr-me { display: none; }

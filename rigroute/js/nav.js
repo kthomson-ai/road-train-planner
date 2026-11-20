@@ -97,12 +97,14 @@ const NAV = (() => {
   let view3d = (() => { try { return localStorage.getItem('rr.view3d') !== '0'; } catch { return true; } })();
   let cam3dOn = false, rot = 0, brg = null, prevMove = null;
   const HANDLERS = ['dragging', 'touchZoom', 'doubleClickZoom', 'scrollWheelZoom', 'boxZoom', 'keyboard'];
-  function sizeCam() {
+  function sizeCam() { // 3D needs room out to the horizon; flat-but-turned only needs the screen's diagonal
     const W = innerWidth, H = innerHeight, M = Math.max(W, H), el = map.getContainer();
-    el.style.setProperty('--camS', Math.ceil(2.15 * M) + 'px'); el.style.setProperty('--camP', Math.ceil(2 * M) + 'px');
+    el.style.setProperty('--camS', (view3d ? Math.ceil(2.15 * M) : Math.ceil(Math.hypot(W, H) * 1.04)) + 'px');
+    el.style.setProperty('--camP', Math.ceil(2 * M) + 'px'); el.style.setProperty('--camTilt', view3d ? '45deg' : '0deg');
   }
+  // while following, the map always turns with the direction of travel; 3D adds the tilt, 2D keeps it flat
   function cam3d(on) {
-    on = !!on && view3d && active;
+    on = !!on && active;
     if (on === cam3dOn) return;
     cam3dOn = on;
     const el = map.getContainer(), c = map.getCenter();
@@ -132,7 +134,15 @@ const NAV = (() => {
     const d = ((cand - brg + 540) % 360) - 180, k = 0.6; // shortest way round, smoothed
     brg = (brg + d * k + 360) % 360; rot += d * k;
   }
-  function setView3d(on) { view3d = !!on; try { localStorage.setItem('rr.view3d', on ? '1' : '0'); } catch { } if (!on) cam3d(false); autoZ = null; refresh(); }
+  function setView3d(on) {
+    view3d = !!on; try { localStorage.setItem('rr.view3d', on ? '1' : '0'); } catch { }
+    if (cam3dOn) { // swap tilt in place: resize the map for the new view, then let it settle
+      document.body.classList.remove('cam3d-live'); sizeCam();
+      const c = map.getCenter(); camMoving = true; try { map.invalidateSize({ pan: false }); map.setView(c, map.getZoom(), { animate: false }); } finally { camMoving = false; }
+      requestAnimationFrame(() => requestAnimationFrame(() => cam3dOn && document.body.classList.add('cam3d-live')));
+    }
+    autoZ = null; refresh();
+  }
   // map marker for your position: all drawn top-down, front at the top, so they turn with the direction of travel
   const MARKERS = {
     arrow: { w: 48, h: 48, svg: '<svg viewBox="-24 -24 48 48"><circle r="22" fill="rgba(54,165,245,.2)"/><path d="M0 -17 L13 15 L0 8 L-13 15 Z" fill="#36A5F5" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/></svg>' },
@@ -292,7 +302,7 @@ const NAV = (() => {
   function stop() { cam3d(false); active = false; stopTracking(); try { speechSynthesis.cancel(); } catch { } try { lock && lock.release(); } catch { } lock = null; document.body.classList.remove('driving'); if (posMarker) map.removeLayer(posMarker); }
   function setMuted(m) { muted = m; if (m) try { speechSynthesis.cancel(); } catch { } }
   // test hook
-  return { start, stop, setMuted, setVoice, refresh, zoomBy, setView3d, setMarker, marker: () => markerKind, view3d: () => view3d, is3d: () => cam3dOn, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
+  return { start, stop, setMuted, setVoice, refresh, zoomBy, setView3d, setMarker, marker: () => markerKind, view3d: () => view3d, is3d: () => cam3dOn && view3d, turning: () => cam3dOn, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
 })();
 
 // ---- voice input for address boxes ----

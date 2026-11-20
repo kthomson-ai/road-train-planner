@@ -169,6 +169,20 @@ const RAV = (() => {
     return false;
   }
 
+  // ---- U-turns ----
+  // Road trains can't U-turn. A reversal at one junction is priced out during the search; a reversal spread over a
+  // short link (e.g. across a median between two carriageways mapped as separate lines) is caught afterwards and
+  // that transition priced out too (see route()).
+  const UTURN_S = 1800, UTURN_DEG = 150, TKEY = 8388608; // 30 min penalty; transition key = din * TKEY + dout
+  function endB(G, d) { if (!G._eb) { G._eb = new Float32Array(G.E.length * 2).fill(NaN); G._sb = new Float32Array(G.E.length * 2).fill(NaN); } let v = G._eb[d]; if (v !== v) v = G._eb[d] = endBearing(G, d); return v; }
+  function startB(G, d) { if (!G._sb) endB(G, d); let v = G._sb[d]; if (v !== v) v = G._sb[d] = startBearing(G, d); return v; }
+  function turnPen(G, din, dout, tpen) {
+    let p = 0;
+    if (tpen && tpen.size) p += tpen.get(din * TKEY + dout) || 0;
+    if (Math.abs(turnDelta(endB(G, din), startB(G, dout))) > UTURN_DEG) p += UTURN_S;
+    return p;
+  }
+
   // planning speed (km/h): posted RAV limit if given, else 90 on state roads, 70 on local roads
   const speedOf = f => !f ? 60 : f.speed ? Math.min(f.speed, 90) : f.state ? 90 : 70;
   function edgeCost(G, ei, len, endpointEdges) {
@@ -200,8 +214,8 @@ const RAV = (() => {
   Heap.prototype.size = function () { return this.k.length; };
 
   // edge-based Dijkstra with turn bans
-  function route(G, from, to, opts = {}) {
-    const blocked = opts.blocked || null, slow = opts.slow || null, pen = opts.pen || null;
+  function routeOnce(G, from, to, opts = {}) {
+    const blocked = opts.blocked || null, slow = opts.slow || null, pen = opts.pen || null, tpen = opts.tpen || null;
     const s = snap(G, from, 50000, blocked), t = snap(G, to, 50000, blocked);
     if (!s || !t) return { error: 'Could not find the approved network near ' + (!s ? 'the start' : 'the destination') + '.' };
     const ends = new Set([s.ei, t.ei]);
@@ -227,13 +241,13 @@ const RAV = (() => {
       for (const dout of G.out[j]) {
         if ((dout >> 1) === t.ei) {
           if (!banned(G, d, dout)) {
-            const extra = (dout & 1) ? t.toB : t.toA; const tot = c + extra / vT;
+            const extra = (dout & 1) ? t.toB : t.toA; const tot = c + extra / vT + turnPen(G, d, dout, tpen);
             if (tot < best) { best = tot; bestEnd = d; bestMode = dout; }
           }
         }
         if (banned(G, d, dout)) continue;
         const ei = dout >> 1;
-        if (blocked && blocked.has(ei) && !ends.has(ei)) continue; const nc = c + edgeCost(G, ei, G.E[ei].len, ends) * (slow && slow.has(ei) ? 1.6 : 1) * (pen && pen.has(ei) ? pen.get(ei) : 1);
+        if (blocked && blocked.has(ei) && !ends.has(ei)) continue; const nc = c + edgeCost(G, ei, G.E[ei].len, ends) * (slow && slow.has(ei) ? 1.6 : 1) * (pen && pen.has(ei) ? pen.get(ei) : 1) + turnPen(G, d, dout, tpen);
         if (nc < dist[dout]) { dist[dout] = nc; prev[dout] = d; H.push(nc, dout); }
       }
     }
@@ -284,7 +298,7 @@ const RAV = (() => {
         const a = cur.pts, b = L.pts;
         const pin = pick(a, true), pout = pick(b, false);
         td = turnDelta(bearing(pin, a[a.length - 1]), bearing(b[0], pout));
-        instr = td < -135 || td > 135 ? 'Make a sharp ' + (td < 0 ? 'left' : 'right') + ' onto'
+        instr = td < -165 || td > 165 ? 'Make a U-turn onto' : td < -135 || td > 135 ? 'Make a sharp ' + (td < 0 ? 'left' : 'right') + ' onto'
           : td < -45 ? 'Turn left onto' : td > 45 ? 'Turn right onto'
           : td < -15 ? 'Bear left onto' : td > 15 ? 'Bear right onto' : 'Continue onto';
       }
@@ -325,6 +339,34 @@ const RAV = (() => {
     const bridgesNear = G.brs.filter(b => inB(b.at, lb) && near(b.at, 40));
     const total = legs.reduce((a, L) => a + L.len, 0);
     return { line, steps, legs, total, secs, s, t, conditions: [...condMap.values()], rulesNear, bridgesNear };
+  }
+  // reversals of more than UTURN_DEG within ~40 or ~75 m either side of a junction, over any number of short edges
+  function findUTurns(G, r) {
+    const L = r.legs; if (!L || L.length < 2) return [];
+    const pts = [], cum = [], starts = []; let acc = 0;
+    L.forEach((g, i) => { const q = i ? g.pts.slice(1) : g.pts; if (i) starts.push(pts.length - 1); for (const p of q) { if (pts.length) acc += hav(pts[pts.length - 1], p); pts.push(p); cum.push(acc); } });
+    const at = d => { d = Math.max(0, Math.min(acc, d)); let i = 1; while (i < cum.length - 1 && cum[i] < d) i++; const t = (d - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]); return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t]; };
+    const out = [];
+    starts.forEach((pi, n) => {
+      const c = cum[pi]; if (c < 30 || acc - c < 30) return; // not right at the start or end
+      const p = pts[pi];
+      const rev = [40, 75].some(w => { const a = at(c - w), b = at(c + w); return hav(a, p) > 15 && hav(p, b) > 15 && Math.abs(turnDelta(bearing(a, p), bearing(p, b))) > UTURN_DEG; });
+      if (rev) out.push({ din: L[n].d, dout: L[n + 1].d, at: p, name: nameOfEdge(G, L[n + 1].d) || nameOfEdge(G, L[n].d) });
+    });
+    return out;
+  }
+  function route(G, from, to, opts = {}) {
+    const tpen = new Map(opts.tpen || []); let r;
+    for (let k = 0; k < 5; k++) {
+      r = routeOnce(G, from, to, { ...opts, tpen }); if (r.error) return r;
+      const u = findUTurns(G, r); if (!u.length) return r;
+      let added = false; for (const x of u) { const key = x.din * TKEY + x.dout; if (!tpen.has(key)) { tpen.set(key, UTURN_S); added = true; } }
+      if (!added) break;
+    }
+    // a U-turn is the only way: keep it, but flag it (listed with the route and spoken ahead)
+    const seen = new Set();
+    for (const x of findUTurns(G, r)) { const k = x.at.map(v => v.toFixed(4)).join(); if (seen.has(k)) continue; seen.add(k); r.conditions.push({ road: x.name || 'this road', text: 'This route includes a U-turn here. Check it is possible and legal for your vehicle, or plan another way.', at: x.at, notThrough: false, uturn: true }); r.uturns = (r.uturns || 0) + 1; }
+    return r;
   }
   const bbox = (pts, pad) => { let x0 = 180, y0 = 90, x1 = -180, y1 = -90; for (const p of pts) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } return [x0 - pad, y0 - pad, x1 + pad, y1 + pad]; };
   const inB = (p, b) => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
