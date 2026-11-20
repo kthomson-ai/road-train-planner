@@ -64,13 +64,20 @@ const RAV = (() => {
       const fwy = /\b(fwy|freeway)\b/i.test(p.ROAD_NAME || '');
       return { name: p.ROAD_NAME || 'Unnamed road', conds, notThrough: conds.some(c => NOT_THROUGH.test(c)), speed: (!isNaN(ms) && ms > 10 && ms < 120) ? ms : fwy ? 90 : (hier || null), state: /state/i.test(p.NETWORK_TYPE || ''), unsealed: conds.some(c => /unsealed/i.test(c)), local: !!p._local };
     });
+    // one-way candidates, from Main Roads naming: carriageways "Roe Hwy (Northbound)", ramps "Berkshire Rd on to Roe Hwy (Northbound)"
+    const RAMP = /^(.+?)\s+(?:on|off)\s+to\s+(.+)$/i, CWY = /\((north|south|east|west)bound\)/i;
+    feats.forEach(F => { const r = RAMP.exec(F.name); if (r) F.ramp = { from: r[1], to: r[2] }; else { const c = CWY.exec(F.name); if (c) F.cwy = { north: 0, east: 90, south: 180, west: 270 }[c[1].toLowerCase()]; } });
+    const fOrd = new Map(), fEnd = new Map(); // feature -> vertex order along its geometry; feature -> [first vertex, last vertex]
     features.forEach((f, fi) => {
       const g = f.geometry; if (!g) return;
       const lines = g.type === 'MultiLineString' ? g.coordinates : g.type === 'LineString' ? [g.coordinates] : [];
-      for (const L of lines) for (let k = 1; k < L.length; k++) {
-        const a = node(L[k - 1]), b = node(L[k]); if (a === b) continue;
+      const ow = feats[fi].ramp || feats[fi].cwy != null, ord = ow ? new Map() : null; let n = 0, first = -1, last = -1;
+      for (const L of lines) for (let k = 0; k < L.length; k++) {
+        const b = node(L[k]); if (ord && !ord.has(b)) ord.set(b, n++); if (first < 0) first = b; last = b;
+        if (k === 0) continue; const a = node(L[k - 1]); if (a === b) continue;
         vadj[a].push([b, fi]); vadj[b].push([a, fi]);
       }
+      if (ord) { fOrd.set(fi, ord); fEnd.set(fi, [first, last]); }
     });
     // heal: connect dead ends to nearest vertex of a different feature within healM
     const cellDeg = 0.002, grid = new Grid(cellDeg);
@@ -84,6 +91,7 @@ const RAV = (() => {
       let best = -1, bd = healM;
       for (const j of grid.near(coords[i][0], coords[i][1], 1)) {
         if (near.has(j)) continue;
+        if (vadj[j].length === 2) { const F = vadj[j][0][1] >= 0 ? feats[vadj[j][0][1]] : null; if (F && (F.ramp || F.cwy != null || F.state || F.speed >= 70)) continue; } // would invent a crossing of a median
         const d = hav(coords[i], coords[j]); if (d < bd) { bd = d; best = j; }
       }
       if (best >= 0) { vadj[i].push([best, -1]); vadj[best].push([i, -1]); healed++; }
@@ -121,6 +129,23 @@ const RAV = (() => {
       const f = f1;
       E.push({ a: jId[s], b: jId[cur], path, len, f });
     }
+    // one-way: +1 = only along the feature's own direction, -1 = only against it, 0 = unknown (both ways allowed)
+    const fdir = new Map();
+    const nbNames = (v, fi) => vadj[v].filter(([, f2]) => f2 >= 0 && f2 !== fi && !feats[f2].ramp).map(([, f2]) => feats[f2].name);
+    for (const [fi, [v0, v1]] of fEnd) {
+      const F = feats[fi]; let dir = 0;
+      if (F.ramp) {
+        const n0 = nbNames(v0, fi), n1 = nbNames(v1, fi), m = (ns, x) => ns.some(n => namesMatch(n, x));
+        const f0 = m(n0, F.ramp.from), t0 = m(n0, F.ramp.to), f1 = m(n1, F.ramp.from), t1 = m(n1, F.ramp.to);
+        const fwd = (f0 && !t0) || (t1 && !f1), rev = (t0 && !f0) || (f1 && !t1);
+        dir = fwd && !rev ? 1 : rev && !fwd ? -1 : 0;
+      } else if (F.cwy != null && hav(coords[v0], coords[v1]) > 20) {
+        const d = Math.abs(turnDelta(F.cwy, bearing(coords[v0], coords[v1]))); dir = d < 75 ? 1 : d > 105 ? -1 : 0;
+      }
+      if (dir) fdir.set(fi, dir);
+    }
+    const ow = new Int8Array(E.length); let owCount = 0;
+    E.forEach((e, ei) => { const dir = fdir.get(e.f); if (!dir) return; const o = fOrd.get(e.f), oa = o.get(e.path[0]), ob = o.get(e.path[e.path.length - 1]); if (oa == null || ob == null || oa === ob) return; ow[ei] = dir * (ob > oa ? 1 : -1); owCount++; });
     // adjacency of directed edges out of junction
     const out = J.map(() => []);
     E.forEach((e, i) => { out[e.a].push(2 * i); out[e.b].push(2 * i + 1); });
@@ -133,7 +158,7 @@ const RAV = (() => {
     // long segments may cross several cells: also index endpoints
     E.forEach((e, ei) => { for (let k = 1; k < e.path.length; k++) { const a = coords[e.path[k - 1]], b = coords[e.path[k]]; const L = hav(a, b); if (L > 800) { const n = Math.ceil(L / 800); for (let s = 1; s < n; s++) sgrid.add(a[0] + (b[0] - a[0]) * s / n, a[1] + (b[1] - a[1]) * s / n, ei * 1e6 + k); } } });
     const brs = (bridges || []).filter(b => b.geometry).map(b => ({ at: b.geometry.coordinates, props: b.properties }));
-    return { coords, feats, E, J, out, jRules, rules, sgrid, healed, brs, nVert: nV };
+    return { coords, feats, E, J, out, jRules, rules, sgrid, healed, brs, nVert: nV, ow, owCount };
   }
 
   function parseRule(t) {
@@ -216,6 +241,7 @@ const RAV = (() => {
   // edge-based Dijkstra with turn bans
   function routeOnce(G, from, to, opts = {}) {
     const blocked = opts.blocked || null, slow = opts.slow || null, pen = opts.pen || null, tpen = opts.tpen || null;
+    const OW = opts.ignoreOneWay ? null : G.ow, wrongWay = d => !!(OW && OW[d >> 1] && ((OW[d >> 1] === 1) === !!(d & 1)));
     const s = snap(G, from, 50000, blocked), t = snap(G, to, 50000, blocked);
     if (!s || !t) return { error: 'Could not find the approved network near ' + (!s ? 'the start' : 'the destination') + '.' };
     const ends = new Set([s.ei, t.ei]);
@@ -224,7 +250,7 @@ const RAV = (() => {
     const se = G.E[s.ei];
     const vS = speedOf(se.f >= 0 ? G.feats[se.f] : null) / 3.6;
     // virtual arrivals: travelling from snap point toward b == directed 2*ei arriving at b ; toward a == 2*ei+1 arriving at a
-    const init = [[2 * s.ei, s.toB / vS], [2 * s.ei + 1, s.toA / vS]];
+    const init = [[2 * s.ei, s.toB / vS], [2 * s.ei + 1, s.toA / vS]].filter(([d]) => !wrongWay(d));
     for (const [d, c] of init) { dist[d] = c; prev[d] = -1; H.push(c, d); }
     const te = G.E[t.ei];
     const vT = speedOf(te.f >= 0 ? G.feats[te.f] : null) / 3.6;
@@ -232,7 +258,7 @@ const RAV = (() => {
     let best = Infinity, bestEnd = -1, bestMode = null;
     if (s.ei === t.ei) {
       const sa = s.toA, ta = t.toA;
-      best = Math.abs(ta - sa) / vS; bestMode = 'same';
+      if (!wrongWay(ta >= sa ? 2 * s.ei : 2 * s.ei + 1)) { best = Math.abs(ta - sa) / vS; bestMode = 'same'; }
     }
     while (H.size()) {
       const d = H.pop(), c = H.lastKey; if (c > dist[d]) continue; if (c >= best) break;
@@ -240,12 +266,12 @@ const RAV = (() => {
       // reaching destination edge from node j: entering t.ei from its a (dir 2ei) costs toA; from b (dir 2ei+1) costs toB
       for (const dout of G.out[j]) {
         if ((dout >> 1) === t.ei) {
-          if (!banned(G, d, dout)) {
+          if (!banned(G, d, dout) && !wrongWay(dout)) {
             const extra = (dout & 1) ? t.toB : t.toA; const tot = c + extra / vT + turnPen(G, d, dout, tpen);
             if (tot < best) { best = tot; bestEnd = d; bestMode = dout; }
           }
         }
-        if (banned(G, d, dout)) continue;
+        if (banned(G, d, dout) || wrongWay(dout)) continue;
         const ei = dout >> 1;
         if (blocked && blocked.has(ei) && !ends.has(ei)) continue; const nc = c + edgeCost(G, ei, G.E[ei].len, ends) * (slow && slow.has(ei) ? 1.6 : 1) * (pen && pen.has(ei) ? pen.get(ei) : 1) + turnPen(G, d, dout, tpen);
         if (nc < dist[dout]) { dist[dout] = nc; prev[dout] = d; H.push(nc, dout); }
@@ -358,7 +384,13 @@ const RAV = (() => {
   function route(G, from, to, opts = {}) {
     const tpen = new Map(opts.tpen || []); let r;
     for (let k = 0; k < 5; k++) {
-      r = routeOnce(G, from, to, { ...opts, tpen }); if (r.error) return r;
+      r = routeOnce(G, from, to, { ...opts, tpen });
+      if (r.error && G.owCount && !opts.ignoreOneWay) { // one-way directions from road names left no way through: don't strand the driver
+        const r2 = route(G, from, to, { ...opts, ignoreOneWay: true });
+        if (!r2.error) r2.conditions.push({ road: 'this route', text: 'No route follows the one-way ramps and carriageways all the way, so one-way directions were ignored. Check every ramp and divided road against the signs.', at: r2.line[0], notThrough: false, onewayIgnored: true });
+        return r2;
+      }
+      if (r.error) return r;
       const u = findUTurns(G, r); if (!u.length) return r;
       let added = false; for (const x of u) { const key = x.din * TKEY + x.dout; if (!tpen.has(key)) { tpen.set(key, UTURN_S); added = true; } }
       if (!added) break;

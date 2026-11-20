@@ -86,7 +86,7 @@ const NAV = (() => {
     applyRot();
   }
   let lastCam = null;
-  function refresh() { if (!active || !lastCam) return; if (opts.follow()) camera(...lastCam); else cam3d(false); }
+  function refresh() { if (!active || !lastCam) return; if (opts.follow()) camera(...lastCam); else { cam3d(true); applyRot(); } }
   function zoomBy(d) { zoomBias = Math.max(-3, Math.min(2, zoomBias + d)); autoZ = null; refresh(); }
 
   // ---- 3D heading-up view ----
@@ -116,10 +116,12 @@ const NAV = (() => {
     applyRot();
     if (on) requestAnimationFrame(() => requestAnimationFrame(() => cam3dOn && document.body.classList.add('cam3d-live'))); // smooth turning only once in place
   }
+  let mapRot = 0;
   function applyRot() {
-    if (cam3dOn) map.getContainer().style.setProperty('--camRot', (-rot).toFixed(1) + 'deg');
+    if (cam3dOn && (!opts || opts.follow())) { mapRot = rot; map.getContainer().style.setProperty('--camRot', (-mapRot).toFixed(1) + 'deg'); }
     const el = posMarker && posMarker.getElement && posMarker.getElement(), a = el && el.querySelector('.rr-arr');
-    if (a) a.style.transform = `rotate(${rot.toFixed(1)}deg)`; // the arrow points the way you're heading
+    // the icon points the way you're heading; on the tilted map it's stretched to cancel the tilt so it stands up
+    if (a) a.style.transform = `rotate(${rot.toFixed(1)}deg)` + (cam3dOn && view3d ? ' scaleY(1.414)' : '');
   }
   const bearingOf = (a, b) => (Math.atan2((b[0] - a[0]) * Math.cos(a[1] * D2R), b[1] - a[1]) / D2R + 360) % 360;
   // direction of travel: along the route when on it (steady), else the phone's GPS heading, else from movement
@@ -144,11 +146,12 @@ const NAV = (() => {
     autoZ = null; refresh();
   }
   // map marker for your position: all drawn top-down, front at the top, so they turn with the direction of travel
+  const SH = (y, rx) => `<ellipse cx="0" cy="${y}" rx="${rx}" ry="${(rx * 0.32).toFixed(1)}" fill="rgba(0,0,0,.38)"/>`;
   const MARKERS = {
-    arrow: { w: 48, h: 48, svg: '<svg viewBox="-24 -24 48 48"><circle r="22" fill="rgba(54,165,245,.2)"/><path d="M0 -17 L13 15 L0 8 L-13 15 Z" fill="#36A5F5" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/></svg>' },
-    truck: { w: 34, h: 66, svg: '<svg viewBox="-17 -33 34 66"><rect x="-11" y="-6" width="22" height="37" rx="3" fill="#E9EEF2" stroke="#101418" stroke-width="2"/><path d="M-11 4H11M-11 14H11M-11 24H11" stroke="#9AA6B2" stroke-width="1.5"/><rect x="-10" y="-31" width="20" height="22" rx="5" fill="#B7F23D" stroke="#101418" stroke-width="2"/><path d="M-7 -27 Q0 -30 7 -27 L6 -21 Q0 -23 -6 -21 Z" fill="#101418"/><rect x="-13" y="-25" width="3" height="5" rx="1" fill="#101418"/><rect x="10" y="-25" width="3" height="5" rx="1" fill="#101418"/></svg>' },
-    car: { w: 30, h: 52, svg: '<svg viewBox="-15 -26 30 52"><rect x="-11" y="-23" width="22" height="46" rx="9" fill="#36A5F5" stroke="#fff" stroke-width="2.5"/><path d="M-8 -12 Q0 -16 8 -12 L7 -5 Q0 -7 -7 -5 Z" fill="#101418"/><path d="M-7 12 Q0 14 7 12 L8 17 Q0 20 -8 17 Z" fill="#101418"/><rect x="-6" y="-3" width="12" height="13" rx="3" fill="#2a86cc"/></svg>' },
-    van: { w: 32, h: 58, svg: '<svg viewBox="-16 -29 32 58"><rect x="-12" y="-26" width="24" height="52" rx="5" fill="#F2F4F6" stroke="#101418" stroke-width="2"/><path d="M-9 -19 Q0 -22 9 -19 L8 -12 Q0 -14 -8 -12 Z" fill="#101418"/><path d="M-8 -6V20M8 -6V20M-8 -6H8" stroke="#B7C1CA" stroke-width="1.5" fill="none"/><rect x="-14" y="-17" width="3" height="5" rx="1" fill="#101418"/><rect x="11" y="-17" width="3" height="5" rx="1" fill="#101418"/></svg>' }
+    arrow: { w: 52, h: 58, svg: '<svg viewBox="-26 -30 52 58">' + SH(20, 17) + '<path d="M18 16 L0 6 L0 12 L18 22 Z" fill="#165f96"/><path d="M-18 16 L0 6 L0 12 L-18 22 Z" fill="#1d77b9"/><path d="M0 -26 L18 16 L0 6 L-18 16 Z" fill="#36A5F5" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M0 -26 L0 6" stroke="rgba(255,255,255,.35)" stroke-width="2"/></svg>' },
+    truck: { w: 48, h: 92, svg: '<svg viewBox="-24 -46 48 92">' + SH(37, 20) + '<path d="M-12 -28 L-9.5 -43 L9.5 -43 L12 -28 Z" fill="#B7F23D" stroke="#101418" stroke-width="1.6" stroke-linejoin="round"/><path d="M-7.5 -39 L7.5 -39 L8.5 -33 L-8.5 -33 Z" fill="#101418"/><path d="M-17 6 L-13.5 -28 L13.5 -28 L17 6 Z" fill="#EEF2F5" stroke="#101418" stroke-width="1.6" stroke-linejoin="round"/><path d="M-15 -4 L15 -4 M-14 -15 L14 -15" stroke="#C3CCD4" stroke-width="1.4"/><rect x="-17" y="6" width="34" height="26" rx="2" fill="#C9D2DA" stroke="#101418" stroke-width="1.6"/><path d="M0 7 V31" stroke="#8A96A3" stroke-width="1.4"/><rect x="-15.5" y="25" width="5" height="3" rx="1" fill="#F04444"/><rect x="10.5" y="25" width="5" height="3" rx="1" fill="#F04444"/><rect x="-17" y="32" width="34" height="3" rx="1" fill="#101418"/></svg>' },
+    car: { w: 46, h: 64, svg: '<svg viewBox="-23 -32 46 64">' + SH(24, 18) + '<rect x="-18.5" y="15" width="6" height="7" rx="2" fill="#101418"/><rect x="12.5" y="15" width="6" height="7" rx="2" fill="#101418"/><path d="M-17 8 L-13 -24 Q0 -28 13 -24 L17 8 Z" fill="#36A5F5" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M-9 -18 L-8 -22.5 L8 -22.5 L9 -18 Z" fill="#101418"/><path d="M-11 -7 L-9.5 -17 L9.5 -17 L11 -7 Z" fill="#2a86cc"/><path d="M-12.5 -2 L-11 -7 L11 -7 L12.5 -2 Z" fill="#101418"/><rect x="-17" y="7" width="34" height="13" rx="4" fill="#1f6fb0" stroke="#fff" stroke-width="2"/><rect x="-15" y="10" width="6" height="3" rx="1" fill="#F04444"/><rect x="9" y="10" width="6" height="3" rx="1" fill="#F04444"/></svg>' },
+    van: { w: 46, h: 70, svg: '<svg viewBox="-23 -35 46 70">' + SH(28, 19) + '<path d="M-17 3 L-14 -29 Q0 -32 14 -29 L17 3 Z" fill="#F2F4F6" stroke="#101418" stroke-width="1.6" stroke-linejoin="round"/><path d="M-11 -24.5 L-10 -29 L10 -29 L11 -24.5 Z" fill="#101418"/><path d="M-15 -10 L15 -10" stroke="#C3CCD4" stroke-width="1.4"/><rect x="-17" y="3" width="34" height="22" rx="3" fill="#D5DBE0" stroke="#101418" stroke-width="1.6"/><rect x="-14" y="6" width="12" height="7" rx="1.5" fill="#101418"/><rect x="2" y="6" width="12" height="7" rx="1.5" fill="#101418"/><path d="M0 4 V24" stroke="#8A96A3" stroke-width="1.4"/><rect x="-16" y="16" width="4" height="4" rx="1" fill="#F04444"/><rect x="12" y="16" width="4" height="4" rx="1" fill="#F04444"/><rect x="-17" y="25" width="34" height="3" rx="1" fill="#101418"/></svg>' }
   };
   let markerKind = (() => { try { const k = localStorage.getItem('rr.marker'); return MARKERS[k] ? k : 'arrow'; } catch { return 'arrow'; } })();
   const arrowIcon = () => { const m = MARKERS[markerKind]; return L.divIcon({ className: 'rr-navarrow', iconSize: [m.w, m.h], iconAnchor: [m.w / 2, m.h / 2], html: `<div class="rr-arr" style="width:${m.w}px;height:${m.h}px">${m.svg}</div>` }); };
@@ -174,7 +177,7 @@ const NAV = (() => {
     // next maneuver
     const next = man.find(m => m.d > along - 5);
     updateBearing(pt, along, off, heading, vEma);
-    if (opts.follow()) camera(pt, along, off, next ? next.d - along : null); else { lastCam = [pt, along, off, next ? next.d - along : null]; cam3d(false); applyRot(); }
+    if (opts.follow()) camera(pt, along, off, next ? next.d - along : null); else { lastCam = [pt, along, off, next ? next.d - along : null]; cam3d(true); applyRot(); } // looking around: map stays turned as it was
     const v = speed && speed > 2 ? speed : 22; // m/s, ~80 km/h default
     if (next) {
       const dist = next.d - along;
@@ -266,19 +269,28 @@ const NAV = (() => {
       map.on('zoomend', () => { if (!camMoving && active && autoZ != null && opts.follow() && !cam3dOn) zoomBias = Math.max(-3, Math.min(2, zoomBias + map.getZoom() - autoZ)); });
       // on the tilted map: pinch zooms and keeps the map turned with you; a one-finger drag drops to the flat,
       // north-up view so the driver can look around (Re-centre comes back)
-      const el = map.getContainer(), ptrs = new Map(); let drag0 = null, pinch0 = null;
+      const el = map.getContainer(), ptrs = new Map(); let drag0 = null, last = null, panning = false, pinch0 = null;
       const two = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+      // a drag on screen -> the same drag on the turned (and tilted) map: undo the tilt, then the turn
+      const panScreen = (dx, dy) => { const t = view3d ? Math.cos(45 * D2R) : 1, m = mapRot * D2R, y = dy / t; const cx = dx * Math.cos(m) - y * Math.sin(m), cy = dx * Math.sin(m) + y * Math.cos(m); camMoving = true; try { map.panBy([-cx, -cy], { animate: false }); } finally { camMoving = false; } };
       el.addEventListener('pointerdown', e => {
         if (!cam3dOn) return; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-        if (ptrs.size === 1) drag0 = [e.clientX, e.clientY];
-        else if (ptrs.size === 2) { drag0 = null; pinch0 = { d: Math.max(20, two()), bias: zoomBias }; }
+        if (ptrs.size === 1) { drag0 = last = [e.clientX, e.clientY]; panning = false; }
+        else if (ptrs.size === 2) { drag0 = null; panning = false; pinch0 = { d: Math.max(20, two()), bias: zoomBias, z: map.getZoom() }; }
       }, { passive: true });
       el.addEventListener('pointermove', e => {
         if (!cam3dOn || !ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-        if (pinch0 && ptrs.size >= 2) { const nb = Math.max(-3, Math.min(2, pinch0.bias + Math.log2(two() / pinch0.d))); if (Math.abs(nb - zoomBias) >= 0.25) { zoomBias = nb; autoZ = null; refresh(); } return; }
-        if (drag0 && ptrs.size === 1 && Math.hypot(e.clientX - drag0[0], e.clientY - drag0[1]) > 30) { drag0 = null; ptrs.clear(); cam3d(false); opts.onFreeLook && opts.onFreeLook(); }
+        if (pinch0 && ptrs.size >= 2) {
+          const dz = Math.log2(two() / pinch0.d);
+          if (opts.follow()) { const nb = Math.max(-3, Math.min(2, pinch0.bias + dz)); if (Math.abs(nb - zoomBias) >= 0.25) { zoomBias = nb; autoZ = null; refresh(); } }
+          else { const z = Math.round((pinch0.z + dz) * 4) / 4; if (z !== map.getZoom()) { camMoving = true; try { map.setZoom(z, { animate: false }); } finally { camMoving = false; } } }
+          return;
+        }
+        if (!drag0 || ptrs.size !== 1) return;
+        if (!panning && Math.hypot(e.clientX - drag0[0], e.clientY - drag0[1]) > 14) { panning = true; if (opts.follow()) opts.onFreeLook && opts.onFreeLook(); }
+        if (panning) { panScreen(e.clientX - last[0], e.clientY - last[1]); last = [e.clientX, e.clientY]; }
       }, { passive: true });
-      const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = null; if (!ptrs.size) drag0 = null; };
+      const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = null; if (!ptrs.size) { drag0 = null; panning = false; } };
       addEventListener('pointerup', up); addEventListener('pointercancel', up);
       addEventListener('resize', () => { if (cam3dOn) { sizeCam(); camMoving = true; try { map.invalidateSize({ pan: false }); } finally { camMoving = false; } refresh(); } });
     }
