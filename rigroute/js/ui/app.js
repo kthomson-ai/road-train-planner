@@ -317,7 +317,8 @@
           app.RES.routes[app.sel] = Object.assign(nr, { conf: { ...r.conf, gaps: offNet ? [{ ...nr.s, req: pt }] : [] }, along: RR.routing.alongRoute(nr), tight: r.tight, zones: r.zones, label: r.label });
           if (offNet) setTimeout(() => wrongTurnWarning(nr), 2600);
         } return nr; },
-      drawRoute: nr => RR.map.drawRoutes([nr], 0)
+      drawRoute: nr => RR.map.drawRoutes([nr], 0),
+      onFreeLook: () => setFollow(false)
     }, demo);
     NAV.setMuted(!$('setVoice').checked); RR.emit('drivestate'); $('nCentre').hidden = true;
     setTimeout(() => RR.map.get().invalidateSize(), 50);
@@ -334,7 +335,13 @@
     if (RR.shared.activeShare()) { const r = app.RES && app.RES.routes[app.sel]; const near = navPos && r && RAV.hav(navPos, r.line[r.line.length - 1]) < 400; RR.shared.stopShare(near ? 'arrived' : 'ended'); }
     setTimeout(paintFatChip, 50); NAV.stop(); RR.emit('drivestate'); $('closureBar').classList.remove('on'); if (app.pendingData) { app.pendingData = false; setTimeout(() => { loadNetwork(); toast('Main Roads data updated. Plan again to use the latest network.', 5000); }, 300); } setTimeout(() => { RR.map.get().invalidateSize(); showRoute(app.sel, true); }, 60); };
   const setFollow = v => { follow = v; $('nCentre').hidden = v || !NAV.isActive(); };
-  $('nCentre').onclick = () => setFollow(true);
+  $('nCentre').onclick = () => { setFollow(true); NAV.refresh(); };
+  // zoom buttons: while following they set how close the camera sits; when looking around they just zoom
+  const camZoom = d => { if (follow) NAV.zoomBy(d); else { const m = RR.map.get(); m.setZoom(m.getZoom() + d * 2); } };
+  $('nZoomIn').onclick = () => camZoom(0.5); $('nZoomOut').onclick = () => camZoom(-0.5);
+  const paint3d = () => { $('n3d').textContent = NAV.view3d() ? '2D' : '3D'; };
+  $('n3d').onclick = () => { NAV.setView3d(!NAV.view3d()); paint3d(); toast(NAV.view3d() ? '3D view: map turns with you.' : 'Flat view: north up.'); };
+  paint3d();
   setTimeout(() => RR.map.get().on('dragstart', () => NAV.isActive() && setFollow(false)), 0);
   let muted = false; $('nMute').onclick = () => { muted = !muted; NAV.setMuted(muted); $('nMute').textContent = muted ? '🔇' : '🔊'; };
 

@@ -71,22 +71,74 @@ const NAV = (() => {
     return Math.round(Math.max(13, Math.min(18.5, z + zoomBias)) * 2) / 2;
   }
   function camera(pt, along, off, distToTurn) {
+    lastCam = [pt, along, off, distToTurn];
     let z = targetZoom(distToTurn);
     if (autoZ != null && Math.abs(z - autoZ) < 0.5) z = autoZ; // no flicker on small speed changes
     autoZ = z;
-    let c = [pt[1], pt[0]];
-    if (off < 60) { // look ahead along the route so the truck sits below the middle of the screen
+    cam3d(true);
+    let c = [pt[1], pt[0]]; // 3D view: the vehicle stays in the middle of the screen
+    if (!cam3dOn && off < 60) { // flat view: look ahead along the route so the truck sits below the middle
       const sz = map.getSize(), mpp = 156543.03 * Math.cos(pt[1] * D2R) / Math.pow(2, z);
       const a = pointAt(along + 0.22 * Math.min(sz.x, sz.y) * mpp);
       c = [a[1], a[0]];
     }
     camMoving = true; try { map.setView(c, z, { animate: false }); } finally { camMoving = false; }
+    applyRot();
   }
+  let lastCam = null;
+  function refresh() { if (!active || !lastCam) return; if (opts.follow()) camera(...lastCam); else cam3d(false); }
+  function zoomBy(d) { zoomBias = Math.max(-3, Math.min(2, zoomBias + d)); autoZ = null; refresh(); }
+
+  // ---- 3D heading-up view ----
+  // Leaflet can't rotate or tilt, so the whole map element is made larger than the screen (enough to fill it
+  // once tilted and turned), then tilted ~45° and rotated with CSS so the direction of travel points up. The
+  // vehicle sits at the centre, which is the pivot. Leaflet's own drag and pinch don't work on a tilted map, so
+  // they're switched off while following; dragging the map drops back to the flat, north-up view to look around.
+  let view3d = (() => { try { return localStorage.getItem('rr.view3d') !== '0'; } catch { return true; } })();
+  let cam3dOn = false, rot = 0, brg = null, prevMove = null;
+  const HANDLERS = ['dragging', 'touchZoom', 'doubleClickZoom', 'scrollWheelZoom', 'boxZoom', 'keyboard'];
+  function sizeCam() {
+    const W = innerWidth, H = innerHeight, M = Math.max(W, H), el = map.getContainer();
+    el.style.setProperty('--camS', Math.ceil(2.15 * M) + 'px'); el.style.setProperty('--camP', Math.ceil(2 * M) + 'px');
+  }
+  function cam3d(on) {
+    on = !!on && view3d && active;
+    if (on === cam3dOn) return;
+    cam3dOn = on;
+    const el = map.getContainer(), c = map.getCenter();
+    if (on) sizeCam();
+    document.body.classList.remove('cam3d-live');
+    document.body.classList.toggle('cam3d', on);
+    HANDLERS.forEach(k => map[k] && map[k][on ? 'disable' : 'enable']());
+    camMoving = true; try { map.invalidateSize({ pan: false }); map.setView(c, map.getZoom(), { animate: false }); } finally { camMoving = false; }
+    applyRot();
+    if (on) requestAnimationFrame(() => requestAnimationFrame(() => cam3dOn && document.body.classList.add('cam3d-live'))); // smooth turning only once in place
+  }
+  function applyRot() {
+    if (cam3dOn) map.getContainer().style.setProperty('--camRot', (-rot).toFixed(1) + 'deg');
+    const el = posMarker && posMarker.getElement && posMarker.getElement(), a = el && el.querySelector('.rr-arr');
+    if (a) a.style.transform = `rotate(${rot.toFixed(1)}deg)`; // the arrow points the way you're heading
+  }
+  const bearingOf = (a, b) => (Math.atan2((b[0] - a[0]) * Math.cos(a[1] * D2R), b[1] - a[1]) / D2R + 360) % 360;
+  // direction of travel: along the route when on it (steady), else the phone's GPS heading, else from movement
+  function updateBearing(pt, along, off, heading, v) {
+    let cand = null;
+    if (off < 40) { const a = pointAt(along), b = pointAt(along + 30); if (hav(a, b) > 5) cand = bearingOf(a, b); }
+    if (cand == null && heading != null && !isNaN(heading) && (v || 0) > 2) cand = heading;
+    if (cand == null && prevMove && hav(prevMove, pt) > 10) cand = bearingOf(prevMove, pt);
+    if (!prevMove || hav(prevMove, pt) > 10) prevMove = pt;
+    if (cand == null) return;
+    if (brg == null) { brg = rot = cand; return; }
+    const d = ((cand - brg + 540) % 360) - 180, k = 0.6; // shortest way round, smoothed
+    brg = (brg + d * k + 360) % 360; rot += d * k;
+  }
+  function setView3d(on) { view3d = !!on; try { localStorage.setItem('rr.view3d', on ? '1' : '0'); } catch { } if (!on) cam3d(false); autoZ = null; refresh(); }
+  const arrowIcon = () => L.divIcon({ className: 'rr-navarrow', iconSize: [48, 48], iconAnchor: [24, 24], html: '<div class="rr-arr"><svg viewBox="-24 -24 48 48"><circle r="22" fill="rgba(54,165,245,.2)"/><path d="M0 -17 L13 15 L0 8 L-13 15 Z" fill="#36A5F5" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>' });
 
   const fmtKm = m => m < 950 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(m < 20000 ? 1 : 0) + ' km';
   const fmtT = s => { const m = Math.round(s / 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'); };
 
-  function onFix(lon, lat, acc, speed) {
+  function onFix(lon, lat, acc, speed, heading) {
     try { RR.emit('navpos', [lon, lat]); } catch { }
     if (!active || !R) return;
     const pt = [lon, lat], now = Date.now();
@@ -102,7 +154,8 @@ const NAV = (() => {
     if (off > Math.max(80, (acc || 0) * 1.5)) { if (++offCount >= 3 && !rerouting) return reroute(pt); } else offCount = 0;
     // next maneuver
     const next = man.find(m => m.d > along - 5);
-    if (opts.follow()) camera(pt, along, off, next ? next.d - along : null);
+    updateBearing(pt, along, off, heading, vEma);
+    if (opts.follow()) camera(pt, along, off, next ? next.d - along : null); else { lastCam = [pt, along, off, next ? next.d - along : null]; cam3d(false); applyRot(); }
     const v = speed && speed > 2 ? speed : 22; // m/s, ~80 km/h default
     if (next) {
       const dist = next.d - along;
@@ -187,10 +240,20 @@ const NAV = (() => {
 
   function start(route, o, demo) {
     opts = o; ui = o.ui; map = o.map; endInfo = o.endInfo || null; reachedStop = 0; jKey = null;
-    vEma = null; autoZ = null; lastFix = null;
-    if (!camHooked) { camHooked = true; map.on('zoomend', () => { if (!camMoving && active && autoZ != null && opts.follow()) zoomBias = Math.max(-3, Math.min(2, zoomBias + map.getZoom() - autoZ)); }); }
+    vEma = null; autoZ = null; lastFix = null; lastCam = null; prevMove = null;
+    if (!camHooked) {
+      camHooked = true;
+      map.on('zoomend', () => { if (!camMoving && active && autoZ != null && opts.follow() && !cam3dOn) zoomBias = Math.max(-3, Math.min(2, zoomBias + map.getZoom() - autoZ)); });
+      // dragging the tilted map: drop to the flat, north-up view so the driver can look around (Re-centre comes back)
+      const el = map.getContainer(); let g0 = null;
+      el.addEventListener('pointerdown', e => { g0 = cam3dOn ? [e.clientX, e.clientY] : null; }, { passive: true });
+      el.addEventListener('pointermove', e => { if (g0 && cam3dOn && Math.hypot(e.clientX - g0[0], e.clientY - g0[1]) > 14) { g0 = null; cam3d(false); opts.onFreeLook && opts.onFreeLook(); } }, { passive: true });
+      addEventListener('pointerup', () => { g0 = null; });
+      addEventListener('resize', () => { if (cam3dOn) { sizeCam(); camMoving = true; try { map.invalidateSize({ pan: false }); } finally { camMoving = false; } refresh(); } });
+    }
     prepare(route); active = true; document.body.classList.add('driving');
-    if (!posMarker) posMarker = L.circleMarker([route.line[0][1], route.line[0][0]], { radius: 9, color: '#fff', weight: 3, fillColor: '#36A5F5', fillOpacity: 1 }).addTo(map); else posMarker.addTo(map);
+    if (!posMarker) posMarker = L.marker([route.line[0][1], route.line[0][0]], { icon: arrowIcon(), interactive: false, keyboard: false, zIndexOffset: 2000 }).addTo(map); else posMarker.addTo(map);
+    applyRot();
     keepAwake();
     const first = route.steps[0];
     say(`Starting route on ${o.net}. ${fmtKm(route.total).replace('km', 'kilometres')}. Head off on ${speakName(first.name)}.`, true);
@@ -201,14 +264,14 @@ const NAV = (() => {
       return true;
     }
     if (!navigator.geolocation) { flash('GPS not available in this browser.'); return false; }
-    watchId = navigator.geolocation.watchPosition(p => onFix(p.coords.longitude, p.coords.latitude, p.coords.accuracy, p.coords.speed),
+    watchId = navigator.geolocation.watchPosition(p => onFix(p.coords.longitude, p.coords.latitude, p.coords.accuracy, p.coords.speed, p.coords.heading),
       e => flash('GPS problem: ' + e.message + (location.protocol === 'file:' ? ' (phones usually need the hosted link for GPS)' : '')), { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
     return true;
   }
-  function stop() { active = false; stopTracking(); try { speechSynthesis.cancel(); } catch { } try { lock && lock.release(); } catch { } lock = null; document.body.classList.remove('driving'); if (posMarker) map.removeLayer(posMarker); }
+  function stop() { cam3d(false); active = false; stopTracking(); try { speechSynthesis.cancel(); } catch { } try { lock && lock.release(); } catch { } lock = null; document.body.classList.remove('driving'); if (posMarker) map.removeLayer(posMarker); }
   function setMuted(m) { muted = m; if (m) try { speechSynthesis.cancel(); } catch { } }
   // test hook
-  return { start, stop, setMuted, setVoice, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
+  return { start, stop, setMuted, setVoice, refresh, zoomBy, setView3d, view3d: () => view3d, is3d: () => cam3dOn, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
 })();
 
 // ---- voice input for address boxes ----
