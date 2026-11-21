@@ -1,4 +1,4 @@
-// RigRoute configuration: endpoints, vehicle catalogue, rule zones.
+// ROAM configuration: endpoints, vehicle catalogue, rule zones.
 window.RR = window.RR || {};
 RR.config = (() => {
   const MR = 'https://gisservices.mainroads.wa.gov.au/arcgis/rest/services/OpenData/';

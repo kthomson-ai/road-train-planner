@@ -1,5 +1,5 @@
 // Shared data in Supabase (public key; row level security limits what the app can do):
-//  - saved sites: depots / customer sites with access notes, visible to all RigRoute testers
+//  - saved sites: depots / customer sites with access notes, visible to all ROAM testers
 //  - ETA shares: a private link showing the truck's position and ETA while driving
 RR.shared = (() => {
   const cfg = () => RR.config.reports || {};

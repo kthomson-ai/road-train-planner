@@ -1,4 +1,4 @@
-/* RigRoute design system — dark navigation UI */
+/* ROAM design system — dark navigation UI */
 :root {
   --bg: #101418; --surface: #1C242C; --surface2: #232D37; --line: #2C3742; --line2: #3A4652;
   --text: #F5F7FA; --muted: #9AA6B2; --dim: #6E7A86;
@@ -372,3 +372,19 @@ body.ve-car .ve-truck { display: none !important; }
   .sheet.peek header { padding-bottom: 14px; }
   .sheet header { cursor: pointer; }
 }
+
+/* lane guidance under the next-turn picture */
+#junc .jlanes { display: flex; justify-content: center; gap: 3px; padding: 6px 8px; background: #101418; }
+#junc .jlanes[hidden] { display: none; }
+#junc .jlanes .ln { width: 30px; height: 30px; flex: none; border-radius: 5px; }
+#junc .jlanes .ln svg { width: 30px; height: 30px; display: block; stroke: #5b6672; }
+#junc .jlanes .ln.ok svg { stroke: #fff; }
+#junc .jlanes .ln.ok { background: rgba(47,128,255,.35); }
+.fprice { color: var(--text) !important; font-weight: 700; } .fprice.best { color: var(--lime) !important; }
+[data-theme=light] .fprice.best { color: #3d7a00 !important; }
+body:not(.ve-car) .car-only { display: none !important; }
+
+/* ROAM wordmark on the splash */
+.splash h1.roam { letter-spacing: .08em; font-weight: 900; }
+.splash .roamtag { letter-spacing: .28em; text-transform: uppercase; font-size: 12px; }
+.splash .roamtag i { font-style: normal; color: var(--lime); padding: 0 4px; }

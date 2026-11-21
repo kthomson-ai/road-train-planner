@@ -27,6 +27,20 @@ const NAV = (() => {
   }
   const ABBR = [[/\bHwy\b/g, 'Highway'], [/\bGNH\b/g, 'Great Northern Highway'], [/\bRd\b/g, 'Road'], [/\bSt\b/g, 'Street'], [/\bDr\b/g, 'Drive'], [/\bAve?\b/g, 'Avenue'], [/\bPde\b/g, 'Parade'], [/\bTce\b/g, 'Terrace'], [/\bCres\b/g, 'Crescent'], [/\bPl\b/g, 'Place'], [/\bCt\b/g, 'Court'], [/\bBvd\b/g, 'Boulevard'], [/\bWy\b/g, 'Way'], [/\bRty\b/g, 'roundabout'], [/\bNth\b/g, 'North'], [/\bSth\b/g, 'South'], [/\bMt\b/g, 'Mount'], [/\s*\((North|South|East|West)bound\)/gi, ''], [/ - /g, ' ']];
   const speakName = n => { let s = n || 'the road'; for (const [re, r] of ABBR) s = s.replace(re, r); s = s.replace(/\boff to\b/i, 'exit to').replace(/\bon to\b/i, 'ramp to'); return s; };
+  // "use the left two lanes" when the lanes to use sit together at one side (or in the middle)
+  function laneHint(st) {
+    const L = st && st.lanes; if (!L) return '';
+    const ok = L.map(l => l.ok), n = ok.length, k = ok.filter(Boolean).length, w = ['', 'lane', 'two lanes', 'three lanes', 'four lanes'][k] || 'lanes';
+    const first = ok.indexOf(true), last = ok.lastIndexOf(true); if (last - first + 1 !== k) return '';
+    if (first === 0) return k === 1 ? ', using the left lane' : `, using the left ${w}`;
+    if (last === n - 1) return k === 1 ? ', using the right lane' : `, using the right ${w}`;
+    return k === 1 ? ', using the middle lane' : `, using the middle ${w}`;
+  }
+  const LANE_ANG = { straight: 0, none: 0, 'slight left': -45, left: -90, 'sharp left': -135, uturn: -180, 'slight right': 45, right: 90, 'sharp right': 135 };
+  function lanesHtml(st) {
+    const L = st && st.lanes; if (!L) return '';
+    return L.map(l => `<span class="ln ${l.ok ? 'ok' : ''}"><svg viewBox="-12 -12 24 24">${[...new Set(l.ind.map(x => LANE_ANG[x] ?? 0))].map(a => `<g transform="rotate(${a})"><path d="M0 9 V-6 M-5 -1 L0 -7 L5 -1" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>`).join('')}</svg></span>`).join('');
+  }
   const speakInstr = st => { if (st.stop) return `arrive at stop ${st.stop}, ${speakName(st.name)}`; if (!st.name) return st.instr; if (/ towards$/.test(st.instr)) return `${st.instr} ${speakName(st.name)}`; const verb = st.instr.replace(/ onto$/, '').replace(/^Leave on$/, 'Head off'); return `${verb} onto ${speakName(st.name)}`; };
   const speakDist = m => m >= 950 ? `In ${m >= 9500 ? Math.round(m / 1000) : (Math.round(m / 500) / 2).toString()} kilometres` : `In ${m >= 300 ? Math.round(m / 100) * 100 : Math.max(50, Math.round(m / 50) * 50)} metres`;
 
@@ -189,8 +203,8 @@ const NAV = (() => {
     if (next) {
       const dist = next.d - along;
       const far = Math.max(1500, v * 75), mid = Math.max(400, v * 22), now = Math.max(80, v * 6);
-      if (dist <= far && dist > mid * 1.3 && !next.said.far && dist > 1200) { next.said.far = 1; say(`${speakDist(dist)}, ${lc1(speakInstr(next.step))}`); }
-      else if (dist <= mid && dist > now * 1.5 && !next.said.mid) { next.said.mid = 1; next.said.far = 1; say(`${speakDist(dist)}, ${lc1(speakInstr(next.step))}`); }
+      if (dist <= far && dist > mid * 1.3 && !next.said.far && dist > 1200) { next.said.far = 1; say(`${speakDist(dist)}, ${lc1(speakInstr(next.step))}${laneHint(next.step)}`); }
+      else if (dist <= mid && dist > now * 1.5 && !next.said.mid) { next.said.mid = 1; next.said.far = 1; say(`${speakDist(dist)}, ${lc1(speakInstr(next.step))}${laneHint(next.step)}`); }
       else if (dist <= now && !next.said.now) {
         next.said.now = next.said.mid = next.said.far = 1;
         if (next.step.stop) { reachedStop = Math.max(reachedStop, next.step.stop); try { RR.emit('stopreached', reachedStop); } catch { } say(`You've reached stop ${next.step.stop}, ${speakName(next.step.name)}.`, true); flash(`Stop ${next.step.stop} reached: ${next.step.name}`); }
@@ -238,7 +252,7 @@ const NAV = (() => {
     const box = ui.junc; if (!box) return;
     if (box.el) box.el.classList.toggle('far', dist > 1000); // the top banner covers it until the turn is close
     const key = m ? m.d.toFixed(0) : 'end';
-    if (key !== jKey) { jKey = key; box.svg.innerHTML = m ? (m.step.stop ? stopSvg(m.step.stop) : junctionSvg(m)) : flagSvg(); }
+    if (key !== jKey) { jKey = key; box.svg.innerHTML = m ? (m.step.stop ? stopSvg(m.step.stop) : junctionSvg(m)) : flagSvg(); if (box.lanes) { const h = m ? lanesHtml(m.step) : ''; box.lanes.innerHTML = h; box.lanes.hidden = !h; } }
     box.dist.textContent = fmtKm(Math.max(0, dist));
     box.bar.style.width = (100 * (1 - Math.min(dist, 1000) / 1000)).toFixed(0) + '%';
     if (box.name) box.name.textContent = m ? String(m.step.name || '').split(':')[0] : (opts.destName || '');
@@ -324,7 +338,7 @@ const NAV = (() => {
   function stop() { cam3d(false); active = false; stopTracking(); try { speechSynthesis.cancel(); } catch { } try { lock && lock.release(); } catch { } lock = null; document.body.classList.remove('driving'); if (posMarker) map.removeLayer(posMarker); }
   function setMuted(m) { muted = m; if (m) try { speechSynthesis.cancel(); } catch { } }
   // test hook
-  return { start, stop, setMuted, setVoice, refresh, zoomBy, setView3d, setMarker, marker: () => markerKind, view3d: () => view3d, is3d: () => cam3dOn && view3d, turning: () => cam3dOn, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say, goodVoices, vScore };
+  return { start, stop, setMuted, setVoice, refresh, zoomBy, setView3d, setMarker, marker: () => markerKind, view3d: () => view3d, is3d: () => cam3dOn && view3d, turning: () => cam3dOn, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say, _laneHint: laneHint, goodVoices, vScore };
 })();
 
 // ---- voice input for address boxes ----

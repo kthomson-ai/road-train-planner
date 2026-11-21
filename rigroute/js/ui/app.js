@@ -1,4 +1,4 @@
-// RigRoute app controller: screens, search, planning, route details, alerts, truck stops, profiles, driving.
+// ROAM app controller: screens, search, planning, route details, alerts, truck stops, profiles, driving.
 (() => {
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -286,7 +286,7 @@
     const ageHtml = `<div class="dataage" id="routeAge" style="margin:0"><i></i><span>Checking Main Roads data…</span></div>`;
     const btnsHtml = `<div class="rbtns" style="margin:4px 0 10px"><button class="btn" id="rShare">${RR.icon('copy')}Share ETA</button><button class="btn" id="rSite">${RR.icon('pin')}Save destination</button></div>`;
     const destPt = destOf(r).pt, site = RR.shared.siteNear(destPt, 400);
-    const siteHtml = !site ? '' : `<div class="card" style="border-color:rgba(54,165,245,.45)"><h3>${RR.icon('pin')} Site notes: ${esc(site.name)}</h3><p style="margin:0;white-space:pre-wrap">${esc(site.notes || 'No notes yet.')}</p><div class="hint">Shared by RigRoute testers. Updated ${new Date(site.updated).toLocaleDateString('en-AU')}.</div></div>`;
+    const siteHtml = !site ? '' : `<div class="card" style="border-color:rgba(54,165,245,.45)"><h3>${RR.icon('pin')} Site notes: ${esc(site.name)}</h3><p style="margin:0;white-space:pre-wrap">${esc(site.notes || 'No notes yet.')}</p><div class="hint">Shared by ROAM testers. Updated ${new Date(site.updated).toLocaleDateString('en-AU')}.</div></div>`;
     const timingHtml = !tc.issues.length ? '' : `<div class="card" style="border-color:rgba(255,176,32,.5)"><h3>${RR.icon('alert')} Timing for this departure</h3><ul class="alist">${tc.issues.map(i => `<li><span class="ico amber">${RR.icon('alert')}</span><span class="tx"><b>${esc(i.title)}</b><small>${esc(i.text)}</small></span></li>`).join('')}</ul></div>`;
     let pc = null, savedPermitHtml = ''; if (app.PERMIT) { pc = RR.trip.permitCheck(r, app.PERMIT, app.LEAVE || new Date(), tc.arrive); savedPermitHtml = `<div class="card" style="border-color:${pc.ok ? 'rgba(183,242,61,.4)' : 'rgba(240,68,68,.5)'}"><h3>${RR.icon(pc.ok ? 'check' : 'alert')} Permit: ${esc(app.PERMIT.name)}${app.PERMIT.number ? ' (' + esc(app.PERMIT.number) + ')' : ''}</h3><ul class="alist">${pc.items.map(i => `<li><span class="ico ${i.bad ? 'red' : 'lime'}">${RR.icon(i.bad ? 'alert' : 'check')}</span><span class="tx"><small style="color:var(--text);font-size:13.5px">${esc(i.text)}</small></span></li>`).join('')}</ul>${app.PERMIT.fileName ? `<button class="btn block" id="rPermitFile">${RR.icon('copy')}Open permit document</button>` : ''}</div>`; }
     // access basis
@@ -350,7 +350,7 @@
     if ($('rPermitFile')) $('rPermitFile').onclick = () => openPermitFile(app.PERMIT);
     paintFuel(r); paintWeather(r);
     $('startDrive').onclick = () => drive(false); $('demoDrive').onclick = () => drive(true);
-    $('copyDir').onclick = async e => { e.preventDefault(); e.stopPropagation(); const txt = [`RigRoute: ${app.RUN.labels.join(' → ')}`, `${prof.name}${car ? '' : ' (' + RR.net(prof.net).short + ')'}, ${fmtKm(r.total)}, ${fmtT(r.trueSecs || r.secs)}`, ...(car ? [] : [`Permit: ${p.title}`]), ...r.steps.map((s, k) => `${k + 1}. ${s.instr} ${s.name} (${fmtKm(s.len)})`), 'Arrive'].join('\n'); try { await navigator.clipboard.writeText(txt); toast('Directions copied.'); } catch { toast('Copy isn\'t allowed here.'); } };
+    $('copyDir').onclick = async e => { e.preventDefault(); e.stopPropagation(); const txt = [`ROAM: ${app.RUN.labels.join(' → ')}`, `${prof.name}${car ? '' : ' (' + RR.net(prof.net).short + ')'}, ${fmtKm(r.total)}, ${fmtT(r.trueSecs || r.secs)}`, ...(car ? [] : [`Permit: ${p.title}`]), ...r.steps.map((s, k) => `${k + 1}. ${s.instr} ${s.name} (${fmtKm(s.len)})`), 'Arrive'].join('\n'); try { await navigator.clipboard.writeText(txt); toast('Directions copied.'); } catch { toast('Copy isn\'t allowed here.'); } };
   }
   const ARROW = i => /^Arrive at stop/.test(i) ? '📍' : /^Leave on|^Start/.test(i) ? '●' : /sharp left/.test(i) ? '↰' : /sharp right/.test(i) ? '↱' : /left/.test(i) ? (/Bear/.test(i) ? '↖' : '←') : /right/.test(i) ? (/Bear/.test(i) ? '↗' : '→') : '↑';
 
@@ -361,7 +361,7 @@
     const endInfo = !r.car && r.t.d > 300 ? `Your destination is ${fmtKm(r.t.d)} further, off the approved network.` : null;
     const ok = NAV.start(r, {
       map: RR.map.get(), arrow: ARROW, net: RR.net(app.PROF.net).short, car: !!r.car, endInfo, destName: destOf(r).label.split(',')[0], follow: () => follow, simSpeed: () => 1,
-      ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { el: $('junc'), svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel'), name: $('jName') } },
+      ui: { arrow: $('nArrow'), dist: $('nDist'), instr: $('nInstr'), eta: $('nEta'), flash: $('flash'), junc: { el: $('junc'), svg: $('jSvg'), dist: $('jDist'), bar: $('jBar'), label: $('jLabel'), name: $('jName'), lanes: $('jLanes') } },
       graph: () => RR.routing.currentGraph(),
       reroute: (pt, reached) => { if (r.car) return carReroute(r, pt, reached); if (r.swap) { const nr = RR.routing.rerouteSwap(r, pt, Math.max(reached, app.reached || 0)); if (nr && !nr.error) { const offNet = nr.s && nr.s.d > 120; if (offNet) { nr.conf.gaps = [{ ...nr.s, req: pt }]; setTimeout(() => wrongTurnWarning(nr), 2600); } else nr.conf.gaps = nr.conf.gaps.filter(g => g !== nr.s); app.RES.routes[app.sel] = nr; app.RUN = nr.run; } return nr; }
         const run = app.RUN; const stops = run.pts.slice(1, -1), labs = run.labels.slice(1, -1); const G = RR.routing.currentGraph(); const nr = RR.routing.reroute(G, [pt, ...stops.slice(reached), run.pts[run.pts.length - 1]], ['Current position', ...labs.slice(reached), run.labels[run.labels.length - 1]], reached + 1); if (nr && !nr.error) {
@@ -484,6 +484,9 @@
     const cats = facFor(), car = isCar();
     if (app.stopCat && !cats.some(c => c.key === app.stopCat)) app.stopCat = cats.some(c => c.key === SWAP_CAT[app.stopCat]) ? SWAP_CAT[app.stopCat] : null;
     $('stopCats').innerHTML = cats.map(c => `<button class="chip ${app.stopCat === c.key ? 'on' : ''}" data-cat="${c.key}">${RR.icon(c.icon)}${c.label}</button>`).join('');
+    const fuelCat = app.stopCat === 'diesel' || app.stopCat === 'fuel'; app.stopSort = app.stopSort || 'near';
+    if (fuelCat) $('stopScope').innerHTML += `<span style="width:10px"></span>` + [['near', 'Nearest'], ['price', 'Cheapest']].map(([k, l]) => `<button class="chip ${app.stopSort === k ? 'on' : ''}" data-so="${k}">${l}</button>`).join('');
+    $('stopScope').querySelectorAll('[data-so]').forEach(b => b.onclick = () => { app.stopSort = b.dataset.so; renderStops(); });
     $('stopScope').querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { app.stopScope = b.dataset.sc; renderStops(); });
     $('stopCats').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { app.stopCat = app.stopCat === b.dataset.cat ? null : b.dataset.cat; renderStops(); });
     const cat = cats.find(c => c.key === app.stopCat), gq = cat && (typeof cat.g === 'function' ? cat.g(car) : cat.g);
@@ -497,10 +500,20 @@
       const probes = along ? sampleLine(r.line, 6) : [centre];
       for (const p of probes) { const k = cat.key + p.map(v => v.toFixed(2)).join(); if (!gCache.has(k)) gCache.set(k, RR.google.nearby(gq, p, 50, 10).catch(() => [])); const got = await gCache.get(k); got.forEach(g => { const x = place({ ...g, cat: cat.key, kind: 'g', tags: [] }); if (x && !items.some(i => RAV.hav(i.at, x.at) < 150)) items.push(x); }); }
     }
+    const isFuel = cat.key === 'diesel' || cat.key === 'fuel', prod = RR.fuel.productFor(app.PROF || RR.vehicles.active());
+    if (isFuel) {
+      await RR.fuel.load();
+      const fw = RR.fuel.prices(prod).map(place).filter(Boolean);
+      // a FuelWatch station and a Google or Main Roads listing within 150 m are the same place: keep one, with the price
+      items = items.map(i => { const k = fw.findIndex(f => RAV.hav(f.at, i.at) < 150); if (k < 0) return i; const f = fw.splice(k, 1)[0]; return { ...f, name: i.kind === 'g' ? f.name : i.name, kind: i.kind === 'g' ? 'fw' : i.kind, tags: i.tags || [] }; });
+      items = items.concat(fw.map(f => ({ ...f, kind: 'fw', cat: cat.key, tags: [] })));
+    }
     if (app.stopCat !== cat.key) return;
     items.sort((a, b) => (a.along ?? a.dist) - (b.along ?? b.dist));
-    $('stopList').innerHTML = items.length ? items.slice(0, 60).map((f, k) => `<li data-k="${k}"><span class="ico lime">${RR.icon(RR.facIcon(f))}</span><span class="tx"><b>${esc(f.name)}</b><small>${esc(f.address || ({ rtaa: 'Road train assembly area', hvrest: 'Heavy vehicle rest area', rest: 'Rest area', roadhouse: 'Roadhouse' }[f.kind] || ''))}${tagTxt(f, ['rest', 'parking', 'roadhouse', 'diesel', 'food'])}</small><small style="color:var(--dim)">${esc(f.source)}</small></span><span class="km">${fmtKm(f.along ?? f.dist)}</span></li>`).join('') : `<li><span class="tx"><b>No ${cat.label.toLowerCase()} found</b><small>${cat.g && !RR.google.ok() ? 'Google Places isn\'t available right now.' : 'Try the other scope or move the map.'}</small></span></li>`;
-    $('stopNote').textContent = (cat.mr ? 'Rest areas, roadhouses and assembly areas: Main Roads WA. ' : '') + (gq ? (car ? 'Businesses: Google Places, so check opening hours before relying on them.' : 'Businesses: Google Places, so check opening hours and truck access before relying on them.') : '');
+    if (isFuel && app.stopSort === 'price') items.sort((a, b) => (a.price ?? 1e9) - (b.price ?? 1e9));
+    const cheapest = isFuel ? Math.min(...items.filter(i => i.price).map(i => i.price)) : null;
+    $('stopList').innerHTML = items.length ? items.slice(0, 60).map((f, k) => `<li data-k="${k}"><span class="ico lime">${RR.icon(RR.facIcon(f))}</span><span class="tx"><b>${esc(f.name)}</b>${f.price ? `<small class="fprice ${f.price === cheapest ? 'best' : ''}">${RR.fuel.fmt(f.price)} c/L ${RR.fuel.name(prod)}${f.price === cheapest ? ' · cheapest' : ''}${f.tomorrow ? ` · tomorrow ${RR.fuel.fmt(f.tomorrow)}` : ''}${f.restr ? ' · ' + esc(f.restr) : ''}</small>` : ''}<small>${esc(f.address || ({ rtaa: 'Road train assembly area', hvrest: 'Heavy vehicle rest area', rest: 'Rest area', roadhouse: 'Roadhouse' }[f.kind] || ''))}${tagTxt(f, ['rest', 'parking', 'roadhouse', 'diesel', 'food'])}</small><small style="color:var(--dim)">${esc(f.source || (f.fw ? 'FuelWatch' : ''))}</small></span><span class="km">${fmtKm(f.along ?? f.dist)}</span></li>`).join('') : `<li><span class="tx"><b>No ${cat.label.toLowerCase()} found</b><small>${cat.g && !RR.google.ok() ? 'Google Places isn\'t available right now.' : 'Try the other scope or move the map.'}</small></span></li>`;
+    $('stopNote').textContent = (isFuel ? `Prices: FuelWatch WA${RR.fuel.stale() ? ' (couldn\'t get today\'s prices; showing the last saved)' : ''}. ` : '') + (cat.mr ? 'Rest areas, roadhouses and assembly areas: Main Roads WA. ' : '') + (gq ? (car ? 'Businesses: Google Places, so check opening hours before relying on them.' : 'Businesses: Google Places, so check opening hours and truck access before relying on them.') : '');
     RR.map.setFacilities(items.slice(0, 60), f => RR.map.get().setView([f.at[1], f.at[0]], 14));
     $('stopList').querySelectorAll('[data-k]').forEach(li => li.onclick = () => { const f = items[+li.dataset.k]; RR.map.get().setView([f.at[1], f.at[0]], 14); if (window.innerWidth < 900) openSheet(null); });
   }
@@ -577,10 +590,10 @@
   function openReport() {
     repType = null; $('repTitle').textContent = 'What do you see?';
     $('repGrid').hidden = false; $('repDetail').hidden = true;
-    $('repGrid').innerHTML = RR.reports.TYPES.map(t => `<button data-t="${t.key}"><span class="ri" style="background:${repTone[t.tone]}">${RR.icon(t.icon)}</span>${t.label}</button>`).join('');
+    $('repGrid').innerHTML = RR.reports.TYPES.filter(t => !(isCar() && t.key === 'weighbridge')).map(t => isCar() && t.key === 'police' ? { ...t, label: 'Police' } : t).map(t => `<button data-t="${t.key}"><span class="ri" style="background:${repTone[t.tone]}">${RR.icon(t.icon)}</span>${t.label}</button>`).join('');
     $('repGrid').querySelectorAll('[data-t]').forEach(b => b.onclick = () => pickReport(b.dataset.t));
     $('repWhere').textContent = 'Pins at ' + reportPoint().how + '.' + (NAV.isActive() ? ' While driving, one tap sends it. Only report when it\'s safe.' : '');
-    $('repShare').innerHTML = RR.reports.shared() ? 'Reports are shared with other RigRoute drivers and expire automatically.' : '<b>Test mode:</b> reports are saved on this phone only and expire automatically. Sharing them with other drivers needs an online database, which isn\'t connected yet.';
+    $('repShare').innerHTML = RR.reports.shared() ? 'Reports are shared with other ROAM drivers and expire automatically.' : '<b>Test mode:</b> reports are saved on this phone only and expire automatically. Sharing them with other drivers needs an online database, which isn\'t connected yet.';
     openSheet('report');
   }
   async function sendReport(t, detail, side) {
@@ -624,10 +637,20 @@
   }
   // spoken warning when a driver report is coming up on the route
   const warned = new Set();
+  // Main Roads live alerts worth a spoken heads-up (closures have their own reroute prompt); each follows its map toggle
+  const LIVE_SAY = { roadworks: ['Roadworks', 'roadworks'], flood: ['Flooding reported', 'flood'], incident: ['Incident reported', 'closure'], temporary: ['Temporary restriction', 'closure'], fire: ['Fire-related closure', 'fire'] };
+  const inDist = m => m < 950 ? Math.round(m / 100) * 100 + ' metres' : (m / 1000).toFixed(1) + ' kilometres';
   function checkReportsAhead(p) {
-    if (!NAV.isActive() || !app.reports || !app.reports.length || !haz.report) return;
+    if (!NAV.isActive()) return;
     const r = app.RES && app.RES.routes[app.sel]; if (!r) return;
     const near = alongIdx(r), here = near(p); if (here == null) return;
+    for (const a of RR.alerts.live((r.along && r.along.alerts) || [])) {
+      const s = LIVE_SAY[a.cat]; if (!s || !haz[s[1]]) continue;
+      const key = 'mr|' + a.cat + '|' + a.title; if (warned.has(key)) continue;
+      const d = near(a.at); if (d == null) continue; const ahead = d - here;
+      if (ahead > 0 && ahead < 1500 && RAV.hav(p, a.at) < 1800) { warned.add(key); const t = String(a.title || '').replace(/\s+/g, ' ').slice(0, 90); NAV._say(`${s[0]} ahead in ${inDist(ahead)}. ${t}.`); $('flash').textContent = `⚠ ${s[0]} ahead (${fmtKm(ahead)})`; $('flash').classList.add('on'); setTimeout(() => $('flash').classList.remove('on'), 6000); }
+    }
+    if (!app.reports || !app.reports.length || !haz.report) return;
     for (const a of RR.reports.asAlerts(app.reports)) {
       if (warned.has(a.id)) continue;
       const d = near(a.at); if (d == null) continue;
@@ -934,7 +957,7 @@
     if (v.tankL && v.useL) $('pFuelHint').textContent = `≈ ${Math.max(0, Math.round((v.tankL * pct / 100 - (v.reserveL || 0)) / v.useL * 100)).toLocaleString()} km before reserve`;
     const ps = RR.permits.forVehicle(v.id);
     const need = RR.vehicles.permit(tripProfile()).level === 'permit';
-    $('planPermitPick').innerHTML = ps.length ? `<label class="lab" for="pmPick">Permit for this trip</label><select class="inp" id="pmPick"><option value="">None selected</option>${ps.map(p => `<option value="${p.id}">${esc(p.name)}${p.to ? ' (to ' + new Date(p.to).toLocaleDateString('en-AU') + ')' : ''}</option>`).join('')}</select>` : need ? `<div class="hint">This trip needs a permit. Add it under Profile → Permits to have RigRoute check its dates and roads.</div>` : '';
+    $('planPermitPick').innerHTML = ps.length ? `<label class="lab" for="pmPick">Permit for this trip</label><select class="inp" id="pmPick"><option value="">None selected</option>${ps.map(p => `<option value="${p.id}">${esc(p.name)}${p.to ? ' (to ' + new Date(p.to).toLocaleDateString('en-AU') + ')' : ''}</option>`).join('')}</select>` : need ? `<div class="hint">This trip needs a permit. Add it under Profile → Permits to have ROAM check its dates and roads.</div>` : '';
     if (ps.length && $('pmPick')) { const valid = ps.find(p => !p.to || new Date(p.to + 'T23:59') > new Date()); if (need && valid) $('pmPick').value = valid.id; }
   }
   $('pFuel').addEventListener('input', paintTripInputs);
@@ -943,8 +966,19 @@
   function setCheck(label, tone, text) { const b = document.querySelector(`#tripCheck [data-k="${label}"]`); if (!b) return; b.className = 'tc ' + tone; b.querySelector('span').textContent = text; }
   async function paintFuel(r) {
     const v = app.PROF || RR.vehicles.active(); const el = $('routeFuel'); if (!el) return;
-    if (!v.tankL || !v.useL) { el.innerHTML = ''; setCheck('Fuel', 'grey', 'Add tank size and fuel use to the vehicle to check range'); return; }
-    const mr = (r.along.facilities || []).filter(f => f.kind === 'roadhouse' || f.tags.includes('diesel')).map(f => ({ name: placeName(f), along: f.along, at: f.at, source: 'Main Roads' }));
+    const prod = RR.fuel.productFor(v), fname = RR.fuel.name(prod), nearR = alongIdx(r), kmF = x => Math.round(x / 1000).toLocaleString() + ' km';
+    await RR.fuel.load(); if (!$('routeFuel') || app.RES.routes[app.sel] !== r) return;
+    const fwOn = RR.fuel.prices(prod).map(f => ({ ...f, along: nearR(f.at) })).filter(f => f.along != null && offRoute(r, f.at) < 1000);
+    const cheap = fwOn.slice().sort((a, b) => a.price - b.price).slice(0, 3);
+    const cheapHtml = cheap.length ? `<h3 style="margin-top:4px">Cheapest ${esc(fname)} on your route</h3><ul class="alist">${cheap.map((f, k) => `<li data-cheap="${k}"><span class="ico lime">${RR.icon('fuel')}</span><span class="tx"><b>${RR.fuel.fmt(f.price)} c/L · ${esc(f.name)}</b><small>${esc(f.loc)}${f.tomorrow ? ` · tomorrow ${RR.fuel.fmt(f.tomorrow)}` : ''}${f.restr ? ' · ' + esc(f.restr) : ''}</small></span><span class="km">${kmF(f.along)}</span></li>`).join('')}</ul><div class="hint">Within 1 km of the route. Prices: FuelWatch WA${RR.fuel.stale() ? ' (last saved, not today\'s)' : ''}.</div>` : '';
+    const wireCheap = () => $('routeFuel').querySelectorAll('[data-cheap]').forEach(li => li.onclick = () => { const f = cheap[+li.dataset.cheap]; RR.map.get().setView([f.at[1], f.at[0]], 14); });
+    if (!v.tankL || !v.useL) {
+      el.innerHTML = cheapHtml ? `<div class="card">${cheapHtml}<div class="hint">Add tank size and fuel use to the vehicle to check your range.</div></div>` : '';
+      if (cheapHtml) { $('secFuel').hidden = false; wireCheap(); }
+      setCheck('Fuel', cheap.length ? 'blue' : 'grey', cheap.length ? `Cheapest ${fname} ${RR.fuel.fmt(cheap[0].price)} at ${cheap[0].name.slice(0, 32)} (${kmF(cheap[0].along)})` : 'Add tank size and fuel use to the vehicle to check range'); return;
+    }
+    const mr = (r.along.facilities || []).filter(f => f.kind === 'roadhouse' || f.tags.includes('diesel')).map(f => ({ name: placeName(f), along: f.along, at: f.at, source: 'Main Roads' }))
+      .concat(fwOn.map(f => ({ name: f.name, along: f.along, at: f.at, source: 'FuelWatch ' + RR.fuel.fmt(f.price) + ' c/L' })));
     const draw = (stops, note) => {
       const fp = RR.trip.fuelPlan(r, v, app.FUEL || 100, stops); if (!fp || !$('routeFuel')) return;
       const bad = fp.gaps.length > 0, km = x => Math.round(x).toLocaleString() + ' km';
@@ -955,7 +989,7 @@
       else body += `<p class="hint" style="margin:6px 0 0">Arrive with about ${Math.round(fp.arriveL)} L.</p>`;
       if (!fp.longestOk) body += `<p class="hint" style="color:var(--amber)">Longest stretch without known diesel: ${km(fp.longest.km)}, more than a full tank's range.</p>`;
       body += `<div class="hint">${note}</div>`;
-      $('routeFuel').innerHTML = `<div class="card" style="border-color:${bad ? 'rgba(240,68,68,.5)' : 'var(--line)'}"><h3>${RR.icon('fuel')} Fuel</h3>${body}</div>`;
+      $('routeFuel').innerHTML = `<div class="card" style="border-color:${bad ? 'rgba(240,68,68,.5)' : 'var(--line)'}"><h3>${RR.icon('fuel')} Fuel</h3>${body}${cheapHtml ? '<div style="margin-top:12px">' + cheapHtml + '</div>' : ''}</div>`; wireCheap();
       $('secFuel').hidden = false; setCheck('Fuel', bad ? 'red' : fp.fills.length ? 'blue' : 'lime', bad ? 'Not enough fuel to reach the next diesel' : fp.fills.length ? `Fill up at ${fp.fills[0].name.slice(0, 40)} (${km(fp.fills[0].km)})${fp.fills.length > 1 ? ` +${fp.fills.length - 1} more` : ''}` : `No stop needed, arrive with about ${Math.round(fp.arriveL)} L`);
       $('routeFuel').querySelectorAll('[data-fill]').forEach(li => li.onclick = () => { const f = fp.fills[+li.dataset.fill]; RR.map.get().setView([f.at[1], f.at[0]], 13); });
     };
@@ -1113,11 +1147,12 @@
   $('veType').innerHTML = RR.config.vehicleTypes.map(t => `<option value="${t.key}">${t.label}</option>`).join('');
   const groups = [...new Set(RR.config.networks.map(n => n.group))];
   $('veNet').innerHTML = groups.map(g => `<optgroup label="${g}">${RR.config.networks.filter(n => n.group === g).map(n => `<option value="${n.key}">${n.label}</option>`).join('')}</optgroup>`).join('');
-  const VE = { veName: 'name', veType: 'type', veNet: 'net', veH: 'height', veW: 'width', veL: 'length', veGVM: 'gvm', veGCM: 'gcm', veAxles: 'axles', veAxleLim: 'axleLimit', veTrailer: 'trailer', veOS: 'osClass', veTank: 'tankL', veUse: 'useL', veReserve: 'reserveL', veBreak: 'breakTo' };
+  const VE = { veName: 'name', veType: 'type', veNet: 'net', veH: 'height', veW: 'width', veL: 'length', veGVM: 'gvm', veGCM: 'gcm', veAxles: 'axles', veAxleLim: 'axleLimit', veTrailer: 'trailer', veOS: 'osClass', veTank: 'tankL', veUse: 'useL', veReserve: 'reserveL', veBreak: 'breakTo', veFuelType: 'fuelType' };
   function editVehicle(v, isNew) {
     editing = { ...v, _new: !!isNew };
     $('veBreak').innerHTML = '<option value="">Doesn\'t break down</option>' + RR.vehicles.all().filter(x => x.id !== v.id && !RR.car.is(x)).map(x => `<option value="${x.id}">${esc(x.name)} (${RR.net(x.net).short})</option>`).join('');
     for (const [id, k] of Object.entries(VE)) $(id).value = v[k] ?? '';
+    if (!$('veFuelType').value) $('veFuelType').value = 'ulp';
     $('veDG').checked = !!v.dg; $('veTitle').textContent = isNew ? 'New vehicle' : 'Edit vehicle'; $('veDel').hidden = isNew;
     veCar(); paintVePermit(); openSheet('vedit');
   }
@@ -1143,6 +1178,7 @@
 
   // ---------- boot ----------
   async function boot() {
+    RR.fuel.load().catch(() => { });
     RR.paintIcons();
     RR.map.init(); RR.map.drawZones(RR.config.zones);
     paintVehicle();

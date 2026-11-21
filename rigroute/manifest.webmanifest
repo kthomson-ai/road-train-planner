@@ -1,17 +1,17 @@
 {
-  "name": "RigRoute – Heavy Vehicle Navigation",
-  "short_name": "RigRoute",
-  "description": "Smarter routes for heavier vehicles. Heavy vehicle navigation for Western Australia.",
+  "name": "ROAM – Navigation for cars and trucks",
+  "short_name": "ROAM",
+  "description": "Plan, navigate, go further. Vehicle-specific navigation for Western Australia.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#041131",
-  "theme_color": "#101418",
+  "background_color": "#01193A",
+  "theme_color": "#01193A",
   "categories": ["navigation", "travel", "business"],
   "icons": [
-    { "src": "img/icon-192.png?v=10", "sizes": "192x192", "type": "image/png" },
-    { "src": "img/icon-512.png?v=10", "sizes": "512x512", "type": "image/png" },
-    { "src": "img/icon-maskable-512.png?v=10", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "img/icon-192.png?v=33", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icon-512.png?v=33", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/icon-maskable-512.png?v=33", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

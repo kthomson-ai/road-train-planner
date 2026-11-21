@@ -3,28 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<title>RigRoute – Smarter routes for heavier vehicles</title>
-<meta name="description" content="Heavy vehicle navigation for Western Australia: routes on Main Roads approved networks, low-bridge avoidance, permits, live road alerts and truck stops.">
-<meta name="theme-color" content="#101418">
+<title>ROAM – Plan · Navigate · Go further</title>
+<meta name="description" content="ROAM: navigation for cars and heavy vehicles in Western Australia. Vehicle-specific routes, low bridges and weight limits, fuel prices and live road conditions.">
+<meta name="theme-color" content="#01193A">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="img/favicon-64.png?v=32">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=32">
+<link rel="icon" href="img/favicon-64.png?v=33">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=33">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="js/vendor/leaflet.css">
-<link rel="stylesheet" href="css/rigroute.css?v=32">
+<link rel="stylesheet" href="css/rigroute.css?v=33">
 </head>
 <body>
-<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=32" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
+<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=33" alt=""><h1 class="roam">ROAM</h1><p class="roamtag">Plan <i>•</i> Navigate <i>•</i> Go further</p><div class="bar"><i></i></div></div></div>
 
 <div id="map" aria-label="Map"></div>
 
 <!-- top: search + vehicle -->
 <div class="topbar">
   <div class="search">
-    <img src="img/logo-mark.png?v=32" alt="RigRoute">
+    <img src="img/logo-mark.png?v=33" alt="ROAM">
     <input id="q" type="search" placeholder="Where to?" autocomplete="off" enterkeyhint="search" aria-label="Search destination">
     <button class="vchip" id="vchip" aria-label="Change vehicle"><span class="vi" data-icon="truck"></span><div><b id="vchipName">Vehicle</b><small id="vchipSub"></small></div></button>
   </div>
@@ -164,7 +164,7 @@
       <div class="field"><label for="pmNumber">Permit or notice number</label><input class="inp" id="pmNumber" placeholder="optional"></div>
       <div class="field"><label for="pmVeh">For vehicle</label><select class="inp" id="pmVeh"></select></div>
       <div class="grid2"><div class="field"><label for="pmFrom">Valid from</label><input class="inp" id="pmFrom" type="date"></div><div class="field"><label for="pmTo">Valid to</label><input class="inp" id="pmTo" type="date"></div></div>
-      <div class="field"><label for="pmRoads">Approved roads (optional)</label><textarea class="inp" id="pmRoads" rows="3" placeholder="One per line or comma-separated, e.g. Great Eastern Hwy, Roe Hwy, Kewdale Rd" style="height:auto;padding-top:10px"></textarea><div class="hint">If your permit names roads, RigRoute warns when a route uses others.</div></div>
+      <div class="field"><label for="pmRoads">Approved roads (optional)</label><textarea class="inp" id="pmRoads" rows="3" placeholder="One per line or comma-separated, e.g. Great Eastern Hwy, Roe Hwy, Kewdale Rd" style="height:auto;padding-top:10px"></textarea><div class="hint">If your permit names roads, ROAM warns when a route uses others.</div></div>
       <div class="field"><label for="pmNotes">Conditions to remember</label><textarea class="inp" id="pmNotes" rows="2" placeholder="e.g. pilot required over 4.5 m; daylight only" style="height:auto;padding-top:10px"></textarea></div>
       <div class="field"><label for="pmFile">Permit document (PDF or photo)</label><input class="inp" id="pmFile" type="file" accept="application/pdf,image/*" style="padding-top:9px"><div class="hint" id="pmFileInfo">Stored on this phone only, so it's available without signal.</div><button class="btn" id="pmView" hidden style="margin-top:6px">Open document</button></div>
     </div>
@@ -177,7 +177,7 @@
   <div class="body">
     <div class="field"><label for="stName">Name</label><input class="inp" id="stName" placeholder="e.g. Kewdale depot"></div>
     <div class="field"><label for="stKind">Type</label><select class="inp" id="stKind"><option value="depot">Depot</option><option value="customer">Customer site</option><option value="fuel">Fuel / truck stop</option><option value="parking">Parking / layover</option><option value="other">Other</option></select></div>
-    <div class="field"><label for="stNotes">Access notes for drivers</label><textarea class="inp" id="stNotes" rows="4" maxlength="600" placeholder="e.g. Enter off Abernethy Rd, gate 3. Turn around in the yard. Max 26 m." style="height:auto;padding-top:10px"></textarea><div class="hint">Visible to all RigRoute testers. Don't add gate codes or anything private.</div></div>
+    <div class="field"><label for="stNotes">Access notes for drivers</label><textarea class="inp" id="stNotes" rows="4" maxlength="600" placeholder="e.g. Enter off Abernethy Rd, gate 3. Turn around in the yard. Max 26 m." style="height:auto;padding-top:10px"></textarea><div class="hint">Visible to all ROAM testers. Don't add gate codes or anything private.</div></div>
     <div class="hint" id="stWhere"></div>
     <div style="display:flex;gap:10px;margin-top:8px"><button class="btn ghost" id="stDel" style="color:var(--red)">Delete</button><button class="btn primary" id="stSave" style="flex:1">Save site</button></div>
   </div>
@@ -194,7 +194,7 @@
       <div id="fatStatus" class="hint" style="margin:0 0 8px"></div>
       <label class="toggle"><span><b>Break reminders</b><small>WA solo driver standard: 20 min break per 5 h, max 17 h between 7 h rests</small></span><span class="switch"><input type="checkbox" id="fatOn" checked><i></i></span></label>
       <button class="btn block" id="fatReset">Start a new shift</button>
-      <div class="hint">Counts driving time while RigRoute is in driving mode, and stops of 5 minutes or more as breaks. It doesn't know about other work, so it's a reminder, not a work diary.</div>
+      <div class="hint">Counts driving time while ROAM is in driving mode, and stops of 5 minutes or more as breaks. It doesn't know about other work, so it's a reminder, not a work diary.</div>
     </div>
     <div class="card">
       <h3>Permits</h3>
@@ -203,7 +203,7 @@
     </div>
     <div class="card">
       <h3>Saved sites</h3>
-      <div class="hint" style="margin:0 0 8px">Depots and customer sites with access notes. Shared with all RigRoute testers.</div>
+      <div class="hint" style="margin:0 0 8px">Depots and customer sites with access notes. Shared with all ROAM testers.</div>
       <div id="siteList"></div>
       <button class="btn block" id="siteAdd"><span data-icon="plus"></span>Save my current location</button>
     </div>
@@ -212,7 +212,7 @@
     <div class="card" style="margin-top:16px">
       <h3>Settings</h3>
       <label class="toggle"><span><b>Voice guidance</b><small>Spoken turns and warnings</small></span><span class="switch"><input type="checkbox" id="setVoice" checked><i></i></span></label>
-      <div class="field" style="margin-top:12px"><label for="setVoiceName">Voice</label><select class="inp" id="setVoiceName"></select><div class="hint">★ natural-sounding voices. Voices come from your phone.</div><div class="hint" id="voiceTip" hidden>For a more natural voice, download one on your phone, then reopen RigRoute. <b>iPhone:</b> Settings → Accessibility → Spoken Content → Voices → English, pick an Australian voice marked Enhanced or Premium. <b>Android:</b> Settings → Text-to-speech → Google Speech Services → Install voice data → English (Australia).</div></div>
+      <div class="field" style="margin-top:12px"><label for="setVoiceName">Voice</label><select class="inp" id="setVoiceName"></select><div class="hint">★ natural-sounding voices. Voices come from your phone.</div><div class="hint" id="voiceTip" hidden>For a more natural voice, download one on your phone, then reopen ROAM. <b>iPhone:</b> Settings → Accessibility → Spoken Content → Voices → English, pick an Australian voice marked Enhanced or Premium. <b>Android:</b> Settings → Text-to-speech → Google Speech Services → Install voice data → English (Australia).</div></div>
       <div class="field"><label for="setRate">Speaking speed <span id="setRateVal">1.0×</span></label><input type="range" id="setRate" min="0.8" max="1.4" step="0.05" value="1" style="width:100%;accent-color:var(--lime)"></div>
       <label class="toggle"><span><b>Speeding alert</b><small>Speed turns red and the voice warns when you're over the limit</small></span><span class="switch"><input type="checkbox" id="setSpeedWarn" checked><i></i></span></label>
       <button class="btn block" id="setVoiceTest"><span data-icon="volume"></span>Test voice</button>
@@ -221,10 +221,10 @@
       <div class="toggle" style="cursor:default"><span><b>Map data</b><small id="dataInfo">Loading…</small></span><button class="btn" id="refresh" style="height:40px">Refresh</button></div>
       <div class="hint" id="offlineInfo" style="margin:8px 0 0"></div>
       <button class="btn block" id="dcShow" style="margin-top:8px">Safety notice &amp; terms</button>
-      <button class="btn block" id="fbOpen" style="margin-top:8px"><span data-icon="report"></span>Send feedback to the RigRoute team</button>
+      <button class="btn block" id="fbOpen" style="margin-top:8px"><span data-icon="report"></span>Send feedback to the ROAM team</button>
     </div>
     <div class="card"><h3>About</h3><div style="font-size:13px;color:var(--muted)">
-      <b style="color:var(--text)">RigRoute 1.0 (preview)</b><br>Planning and navigation aid only. Always follow road signs, your notice or permit, and the official <a href="https://mrwebapps.mainroads.wa.gov.au/hvsnetworkmap" target="_blank" rel="noopener">Main Roads RAV Map</a>.<br><br>
+      <b style="color:var(--text)">ROAM 1.0 (preview)</b><br>Planning and navigation aid only. Always follow road signs, your notice or permit, and the official <a href="https://mrwebapps.mainroads.wa.gov.au/hvsnetworkmap" target="_blank" rel="noopener">Main Roads RAV Map</a>.<br><br>
       Networks, structures, rest areas, closures, incidents and roadworks: Main Roads Western Australia (CC BY 4.0), loaded live. Places: Google. Map: CARTO / OpenStreetMap contributors, Google. Fire and emergency warnings: see <a href="https://www.emergency.wa.gov.au" target="_blank" rel="noopener">Emergency WA</a>.</div></div>
   </div>
 </section>
@@ -249,10 +249,10 @@
       <div class="field"><label for="veTrailer">Trailer / road train configuration</label><input class="inp" id="veTrailer" placeholder="e.g. Semi + dolly + semi"></div>
       <div class="field"><label for="veOS">Oversize classification</label><select class="inp" id="veOS"><option value="none">Not oversize</option><option value="class1">Class 1 RAV oversize (period permit)</option><option value="single">Single trip permit</option><option value="class3">Class 3 oversize prime mover / trailer</option></select></div>
       <label class="toggle"><span><b>Placarded dangerous goods</b><small>Avoids the Northbridge Tunnel</small></span><span class="switch"><input type="checkbox" id="veDG"><i></i></span></label>
-      <div class="field" style="margin-top:10px"><label for="veBreak">Breaks down to (at an assembly area)</label><select class="inp" id="veBreak"></select><div class="hint">For road trains: if this combination can't reach the destination, RigRoute can plan a stop at a road train assembly area to drop trailers and continue as the vehicle chosen here.</div></div>
+      <div class="field" style="margin-top:10px"><label for="veBreak">Breaks down to (at an assembly area)</label><select class="inp" id="veBreak"></select><div class="hint">For road trains: if this combination can't reach the destination, ROAM can plan a stop at a road train assembly area to drop trailers and continue as the vehicle chosen here.</div></div>
     </div>
     <div class="card"><h3>Fuel</h3>
-      <div class="grid3"><div class="unit" data-u="L"><label class="lab" for="veTank">Tank size</label><input class="inp" id="veTank" type="number" step="10" inputmode="numeric" placeholder="e.g. 1400"></div><div class="unit" data-u="L/100"><label class="lab" for="veUse">Fuel use</label><input class="inp" id="veUse" type="number" step="1" inputmode="decimal" placeholder="e.g. 75"></div><div class="unit" data-u="L"><label class="lab" for="veReserve">Keep in reserve</label><input class="inp" id="veReserve" type="number" step="10" inputmode="numeric" placeholder="e.g. 150"></div></div>
+      <div class="field car-only"><label for="veFuelType">Fuel</label><select class="inp" id="veFuelType"><option value="ulp">Unleaded (91)</option><option value="pulp">Premium unleaded (95)</option><option value="r98">98</option><option value="diesel">Diesel</option></select></div><div class="grid3"><div class="unit" data-u="L"><label class="lab" for="veTank">Tank size</label><input class="inp" id="veTank" type="number" step="10" inputmode="numeric" placeholder="e.g. 1400"></div><div class="unit" data-u="L/100"><label class="lab" for="veUse">Fuel use</label><input class="inp" id="veUse" type="number" step="1" inputmode="decimal" placeholder="e.g. 75"></div><div class="unit" data-u="L"><label class="lab" for="veReserve">Keep in reserve</label><input class="inp" id="veReserve" type="number" step="10" inputmode="numeric" placeholder="e.g. 150"></div></div>
       <div class="hint">Used to warn when the next diesel is beyond your range. Use your loaded figure; road trains often use 70–100 L per 100 km.</div>
     </div>
     <div id="vePermit"></div>
@@ -271,7 +271,7 @@
 <!-- driving mode -->
 <div id="navbar"><div class="na" id="nArrow">↑</div><div class="nd" id="nDist"></div><div class="ni" id="nInstr"></div><button id="nMute" aria-label="Mute or unmute voice">🔊</button></div>
 <div id="flash"></div>
-<div id="junc"><div class="jl" id="jLabel"></div><svg id="jSvg" viewBox="-70 -70 140 140" preserveAspectRatio="xMidYMid slice"></svg><div class="jn" id="jName"></div><div class="jd" id="jDist"></div><div class="jbar"><i id="jBar"></i></div></div>
+<div id="junc"><div class="jl" id="jLabel"></div><svg id="jSvg" viewBox="-70 -70 140 140" preserveAspectRatio="xMidYMid slice"></svg><div class="jlanes" id="jLanes" hidden></div><div class="jn" id="jName"></div><div class="jd" id="jDist"></div><div class="jbar"><i id="jBar"></i></div></div>
 <div id="navbot"><span class="eta" id="nEta"></span><button id="nReport" class="rep" aria-label="Report"><span data-icon="report"></span>Report</button><button id="nAddStop" aria-label="Add a stop"><span data-icon="plus"></span>Stop</button><button class="stop" id="nStop">End</button></div>
 <div id="closureBar"><span class="ci" data-icon="block"></span><div class="ct"><b id="cbTitle">Road closed ahead</b><small id="cbSub"></small></div><button class="btn primary" id="cbReroute">Reroute</button><button class="iconbtn" id="cbDismiss" aria-label="Dismiss"><span data-icon="x"></span></button></div>
 <div id="fatChip" hidden></div>
@@ -281,17 +281,17 @@
 <div id="netpill" hidden><span data-icon="alert"></span><span id="netText">No signal: navigation still works</span></div>
 <div id="disclaimer" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="dcTitle">
   <div class="mbox">
-    <img src="img/logo-pin.png?v=32" alt="" style="width:56px;height:56px">
+    <img src="img/logo-pin.png?v=33" alt="" style="width:56px;height:56px">
     <h2 id="dcTitle">Before you drive</h2>
-    <p>RigRoute is a <b>planning aid</b>. It uses Main Roads WA network and live data, but data can be incomplete or out of date.</p>
+    <p>ROAM is a <b>planning aid</b>. It uses Main Roads WA network and live data, but data can be incomplete or out of date.</p>
     <ul>
       <li><b>Road signs, your permit or notice, and your own judgement always come first.</b></li>
-      <li>Check height, width, length and mass for your actual vehicle and load. RigRoute can't see your truck.</li>
+      <li>Check height, width, length and mass for your actual vehicle and load. ROAM can't see your vehicle.</li>
       <li>Permit, curfew and fatigue information is a guide, not legal advice or a work diary.</li>
       <li>Business listings (fuel, food, repairs) come from Google and may not suit heavy vehicles.</li>
       <li>Set the route before you drive, and only report hazards when it's safe.</li>
     </ul>
-    <p class="hint">Field-test version. Your reports and feedback are shared with the RigRoute team and other testers.</p>
+    <p class="hint">Field-test version. Your reports and feedback are shared with the ROAM team and other testers.</p>
     <button class="btn primary big block" id="dcOk">I understand</button>
   </div>
 </div>
@@ -299,24 +299,25 @@
 
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/Leaflet.GoogleMutant.js"></script>
-<script src="js/core.js?v=32"></script>
-<script src="js/nav.js?v=32"></script>
-<script src="js/services/config.js?v=32"></script>
-<script src="js/services/store.js?v=32"></script>
-<script src="js/services/mainroads.js?v=32"></script>
-<script src="js/services/google.js?v=32"></script>
-<script src="js/services/vehicles.js?v=32"></script>
-<script src="js/services/routing.js?v=32"></script>
-<script src="js/services/carroute.js?v=32"></script>
-<script src="js/services/speed.js?v=32"></script>
-<script src="js/services/trip.js?v=32"></script>
-<script src="js/services/shared.js?v=32"></script>
-<script src="js/services/places.js?v=32"></script>
-<script src="js/services/alerts.js?v=32"></script>
-<script src="js/services/reports.js?v=32"></script>
-<script src="js/ui/icons.js?v=32"></script>
-<script src="js/ui/theme.js?v=32"></script>
-<script src="js/ui/map.js?v=32"></script>
-<script src="js/ui/app.js?v=32"></script>
+<script src="js/core.js?v=33"></script>
+<script src="js/nav.js?v=33"></script>
+<script src="js/services/config.js?v=33"></script>
+<script src="js/services/store.js?v=33"></script>
+<script src="js/services/mainroads.js?v=33"></script>
+<script src="js/services/google.js?v=33"></script>
+<script src="js/services/vehicles.js?v=33"></script>
+<script src="js/services/routing.js?v=33"></script>
+<script src="js/services/carroute.js?v=33"></script>
+<script src="js/services/speed.js?v=33"></script>
+<script src="js/services/fuel.js?v=33"></script>
+<script src="js/services/trip.js?v=33"></script>
+<script src="js/services/shared.js?v=33"></script>
+<script src="js/services/places.js?v=33"></script>
+<script src="js/services/alerts.js?v=33"></script>
+<script src="js/services/reports.js?v=33"></script>
+<script src="js/ui/icons.js?v=33"></script>
+<script src="js/ui/theme.js?v=33"></script>
+<script src="js/ui/map.js?v=33"></script>
+<script src="js/ui/app.js?v=33"></script>
 </body>
 </html>

@@ -37,9 +37,16 @@ RR.car = (() => {
   // the service leaves long straights as two far-apart points; the app matches alerts, stops and closures against
   // route points, so fill straights in to one point every ~100 m
   function densify(L) { const out = [L[0]]; for (let i = 1; i < L.length; i++) { const a = L[i - 1], b = L[i], n = Math.min(400, Math.ceil(hav(a, b) / 100)); for (let k = 1; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]); out.push(b); } return out; }
+  function lanesFor(s, prevS) {
+    const at = s.maneuver.location; let L = s.intersections && s.intersections[0] && s.intersections[0].lanes;
+    if (!L && prevS && prevS.intersections) for (let i = prevS.intersections.length - 1; i >= 0; i--) { const x = prevS.intersections[i]; if (hav(x.location, at) > 300) break; if (x.lanes) { L = x.lanes; break; } }
+    if (!L || L.length < 2 || L.every(l => l.valid) || !L.some(l => l.valid)) return null; // only worth showing when some lanes are wrong
+    return L.map(l => ({ ind: (l.indications || ['none']).filter(Boolean), ok: !!l.valid }));
+  }
   function convert(o, wps, labels, firstStopNo) {
-    const steps = []; let rb = null;
+    const steps = []; let rb = null, prevS = null;
     o.legs.forEach((leg, li) => (leg.steps || []).forEach(s => {
+      const ps = prevS; prevS = s;
       const mv = s.maneuver, t = mv.type, g = (s.geometry && s.geometry.coordinates) || [mv.location];
       if (t === 'arrive') { if (li < o.legs.length - 1) steps.push({ instr: `Arrive at stop ${firstStopNo + li}:`, name: labels[li + 1], len: 0, at: g[0], pts: [g[0]], stop: firstStopNo + li }); rb = null; return; }
       const name = s.name || (s.ref ? String(s.ref).split(';')[0] : ''), prev = steps[steps.length - 1];
@@ -52,6 +59,7 @@ RR.car = (() => {
       let verb = verbFor(s, li === 0), nm = name, prep = ' onto';
       if (!nm && (t === 'off ramp' || t === 'on ramp' || t === 'fork')) { nm = destOfStep(s); prep = ' towards'; }
       const st = { instr: t === 'depart' ? (nm ? verb : verb.replace(/ on$/, '')) : verb + (nm ? prep : ''), name: nm, len: s.distance, at: mv.location, pts: g.slice(), td: mv.bearing_before != null && mv.bearing_after != null ? ((mv.bearing_after - mv.bearing_before + 540) % 360) - 180 : 0 };
+      const lanes = lanesFor(s, ps); if (lanes) st.lanes = lanes;
       steps.push(st); if (t === 'roundabout' || t === 'rotary') rb = st;
     }));
     const line = densify(o.geometry.coordinates), snapOf = i => ({ d: wps[i].distance || 0, pt: wps[i].location });
