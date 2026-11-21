@@ -361,3 +361,14 @@ body.driving .rr-me { display: none; }
 /* car mode: hide heavy vehicle inputs */
 body.carmode .truck-only, body.carmode #swapRetWrap, body.carmode #fatChip { display: none !important; }
 body.ve-car .ve-truck { display: none !important; }
+#alertReport { background: var(--lime); color: #101418; border-color: var(--lime); font-weight: 700; }
+
+/* alert pills under the search bar retired: the Alerts tab has the same list */
+.livepill { display: none !important; }
+/* a shrunk panel shows just its handle and title */
+@media (max-width: 899px) {
+  .sheet .grab { width: 60px; margin-top: 8px; padding: 6px 0; background-clip: content-box; box-sizing: content-box; cursor: pointer; }
+  .sheet.peek .body { display: none; }
+  .sheet.peek header { padding-bottom: 14px; }
+  .sheet header { cursor: pointer; }
+}

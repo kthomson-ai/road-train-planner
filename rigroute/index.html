@@ -9,22 +9,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="img/favicon-64.png?v=31">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=31">
+<link rel="icon" href="img/favicon-64.png?v=32">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=32">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="js/vendor/leaflet.css">
-<link rel="stylesheet" href="css/rigroute.css?v=31">
+<link rel="stylesheet" href="css/rigroute.css?v=32">
 </head>
 <body>
-<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=31" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
+<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=32" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
 
 <div id="map" aria-label="Map"></div>
 
 <!-- top: search + vehicle -->
 <div class="topbar">
   <div class="search">
-    <img src="img/logo-mark.png?v=31" alt="RigRoute">
+    <img src="img/logo-mark.png?v=32" alt="RigRoute">
     <input id="q" type="search" placeholder="Where to?" autocomplete="off" enterkeyhint="search" aria-label="Search destination">
     <button class="vchip" id="vchip" aria-label="Change vehicle"><span class="vi" data-icon="truck"></span><div><b id="vchipName">Vehicle</b><small id="vchipSub"></small></div></button>
   </div>
@@ -35,8 +35,6 @@
 <!-- floating controls -->
 <button class="planbtn" id="planBtn"><span data-icon="route"></span>Plan route</button>
 <div class="fabs">
-  <button class="fab lime report" id="fabReport" aria-label="Report something on the road" title="Report"><span data-icon="report"></span></button>
-  <button class="fab" id="fabLayers" aria-label="Map layers" title="Map layers"><span data-icon="layers"></span></button>
   <button class="fab" id="fabAlerts" aria-label="Road alerts" title="Road alerts"><span data-icon="alert"></span><span class="badge" id="alertBadge" hidden>0</span></button>
   <button class="fab" id="fabLocate" aria-label="My location" title="My location"><span data-icon="locate"></span></button>
 </div>
@@ -98,6 +96,7 @@
   <div class="grab"></div>
   <header><h2>Road alerts</h2><span class="tag live" id="alertsLive">Live</span><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
   <div class="body">
+    <button class="btn lime block" id="alertReport" style="margin-bottom:12px"><span data-icon="report"></span>Report something on the road</button>
     <div class="chips" id="alertScope" style="margin-bottom:10px"></div>
     <div class="chips" id="alertCats" style="margin-bottom:12px"></div>
     <div class="card" style="padding:4px 14px"><ul class="alist" id="alertList"></ul></div>
@@ -116,15 +115,6 @@
   </div>
 </section>
 
-<section class="sheet half" id="sheet-layers" aria-label="Map and hazards">
-  <div class="grab"></div>
-  <header><h2>Map &amp; hazards</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
-  <div class="body">
-    <div class="card"><h3>Appearance</h3><div class="seg" id="themeSeg"><button data-theme="auto"><span data-icon="auto"></span>Auto</button><button data-theme="light"><span data-icon="sun"></span>Light</button><button data-theme="dark"><span data-icon="moon"></span>Dark</button></div><div class="hint" id="themeHint">Auto switches to dark at dusk and light at dawn where you are.</div></div>
-    <div class="card"><h3>Map type</h3><div class="seg" id="baseSeg"><button data-base="google"><span data-icon="map"></span>Map</button><button data-base="sat"><span data-icon="sat"></span>Satellite</button><button data-base="dark"><span data-icon="layers"></span>Basic</button></div></div>
-    <div class="card"><h3>Show on map</h3><div id="hazToggles"></div><div class="hint">Hidden hazards still count when planning: closed roads are always avoided if "Avoid live closures" is on.</div></div>
-  </div>
-</section>
 <section class="sheet half" id="sheet-report" aria-label="Report">
   <div class="grab"></div>
   <header><h2 id="repTitle">Report</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
@@ -194,7 +184,7 @@
 </section>
 <section class="sheet" id="sheet-profile" aria-label="Vehicle profiles">
   <div class="grab"></div>
-  <header><h2>Vehicles</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
+  <header><h2>Profile</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
   <div class="body">
     <div id="vehList"></div>
     <button class="btn block" id="vehAdd"><span data-icon="plus"></span>Add vehicle</button>
@@ -217,6 +207,8 @@
       <div id="siteList"></div>
       <button class="btn block" id="siteAdd"><span data-icon="plus"></span>Save my current location</button>
     </div>
+    <div class="card" style="margin-top:16px" id="profMap"><h3>Map type</h3><div class="seg" id="baseSeg"><button data-base="google"><span data-icon="map"></span>Map</button><button data-base="sat"><span data-icon="sat"></span>Satellite</button><button data-base="dark"><span data-icon="layers"></span>Basic</button></div></div>
+    <div class="card"><h3>Show on map</h3><div id="hazToggles"></div><div class="hint">Hidden hazards still count when planning: closed roads are always avoided if "Avoid live closures" is on.</div></div>
     <div class="card" style="margin-top:16px">
       <h3>Settings</h3>
       <label class="toggle"><span><b>Voice guidance</b><small>Spoken turns and warnings</small></span><span class="switch"><input type="checkbox" id="setVoice" checked><i></i></span></label>
@@ -224,7 +216,7 @@
       <div class="field"><label for="setRate">Speaking speed <span id="setRateVal">1.0×</span></label><input type="range" id="setRate" min="0.8" max="1.4" step="0.05" value="1" style="width:100%;accent-color:var(--lime)"></div>
       <label class="toggle"><span><b>Speeding alert</b><small>Speed turns red and the voice warns when you're over the limit</small></span><span class="switch"><input type="checkbox" id="setSpeedWarn" checked><i></i></span></label>
       <button class="btn block" id="setVoiceTest"><span data-icon="volume"></span>Test voice</button>
-      <div class="field" style="margin-top:14px"><label>Appearance</label><div class="seg" id="themeSeg2"><button data-theme="auto">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div></div>
+      <div class="field" style="margin-top:14px"><label>Appearance</label><div class="seg" id="themeSeg2"><button data-theme="auto">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div><div class="hint" id="themeHint"></div></div>
       <label class="toggle"><span><b>Show approved network</b><small>For the selected vehicle</small></span><span class="switch"><input type="checkbox" id="setNet" checked><i></i></span></label>
       <div class="toggle" style="cursor:default"><span><b>Map data</b><small id="dataInfo">Loading…</small></span><button class="btn" id="refresh" style="height:40px">Refresh</button></div>
       <div class="hint" id="offlineInfo" style="margin:8px 0 0"></div>
@@ -270,7 +262,6 @@
 
 <!-- bottom navigation -->
 <nav class="tabbar" aria-label="Main">
-  <button class="tab on" data-tab="map"><span data-icon="map"></span>Map</button>
   <button class="tab" data-tab="plan"><span data-icon="route"></span>Plan Route</button>
   <button class="tab" data-tab="alerts"><span data-icon="alert"></span>Alerts<i class="dot" id="tabAlertDot" hidden></i></button>
   <button class="tab" data-tab="stops"><span data-icon="fuel"></span>Stops</button>
@@ -290,7 +281,7 @@
 <div id="netpill" hidden><span data-icon="alert"></span><span id="netText">No signal: navigation still works</span></div>
 <div id="disclaimer" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="dcTitle">
   <div class="mbox">
-    <img src="img/logo-pin.png?v=31" alt="" style="width:56px;height:56px">
+    <img src="img/logo-pin.png?v=32" alt="" style="width:56px;height:56px">
     <h2 id="dcTitle">Before you drive</h2>
     <p>RigRoute is a <b>planning aid</b>. It uses Main Roads WA network and live data, but data can be incomplete or out of date.</p>
     <ul>
@@ -308,24 +299,24 @@
 
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/Leaflet.GoogleMutant.js"></script>
-<script src="js/core.js?v=31"></script>
-<script src="js/nav.js?v=31"></script>
-<script src="js/services/config.js?v=31"></script>
-<script src="js/services/store.js?v=31"></script>
-<script src="js/services/mainroads.js?v=31"></script>
-<script src="js/services/google.js?v=31"></script>
-<script src="js/services/vehicles.js?v=31"></script>
-<script src="js/services/routing.js?v=31"></script>
-<script src="js/services/carroute.js?v=31"></script>
-<script src="js/services/speed.js?v=31"></script>
-<script src="js/services/trip.js?v=31"></script>
-<script src="js/services/shared.js?v=31"></script>
-<script src="js/services/places.js?v=31"></script>
-<script src="js/services/alerts.js?v=31"></script>
-<script src="js/services/reports.js?v=31"></script>
-<script src="js/ui/icons.js?v=31"></script>
-<script src="js/ui/theme.js?v=31"></script>
-<script src="js/ui/map.js?v=31"></script>
-<script src="js/ui/app.js?v=31"></script>
+<script src="js/core.js?v=32"></script>
+<script src="js/nav.js?v=32"></script>
+<script src="js/services/config.js?v=32"></script>
+<script src="js/services/store.js?v=32"></script>
+<script src="js/services/mainroads.js?v=32"></script>
+<script src="js/services/google.js?v=32"></script>
+<script src="js/services/vehicles.js?v=32"></script>
+<script src="js/services/routing.js?v=32"></script>
+<script src="js/services/carroute.js?v=32"></script>
+<script src="js/services/speed.js?v=32"></script>
+<script src="js/services/trip.js?v=32"></script>
+<script src="js/services/shared.js?v=32"></script>
+<script src="js/services/places.js?v=32"></script>
+<script src="js/services/alerts.js?v=32"></script>
+<script src="js/services/reports.js?v=32"></script>
+<script src="js/ui/icons.js?v=32"></script>
+<script src="js/ui/theme.js?v=32"></script>
+<script src="js/ui/map.js?v=32"></script>
+<script src="js/ui/app.js?v=32"></script>
 </body>
 </html>

@@ -33,9 +33,9 @@
   RR.facIcon = f => f.kind === 'rtaa' ? 'truck' : f.kind === 'hvrest' ? 'parking' : f.kind === 'rest' ? 'rest' : f.kind === 'roadhouse' ? 'food' : (FAC.find(c => c.key === f.cat) || {}).icon || 'pin';
 
   // ---------- sheets & tabs ----------
-  const SHEETS = ['plan', 'route', 'alerts', 'stops', 'profile', 'vedit', 'layers', 'report', 'addstop', 'feedback', 'permit', 'site'];
+  const SHEETS = ['plan', 'route', 'alerts', 'stops', 'profile', 'vedit', 'report', 'addstop', 'feedback', 'permit', 'site'];
   function openSheet(name) {
-    SHEETS.forEach(n => $('sheet-' + n).classList.toggle('on', n === name));
+    SHEETS.forEach(n => { $('sheet-' + n).classList.toggle('on', n === name); $('sheet-' + n).classList.remove('peek'); });
     document.body.classList.toggle('sheet-open', !!name);
     const tab = { plan: 'plan', route: 'plan', alerts: 'alerts', stops: 'stops', profile: 'profile', vedit: 'profile', permit: 'profile', site: 'profile' }[name] || 'map';
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === tab));
@@ -46,19 +46,30 @@
     fabs.style.display = name && window.innerWidth < 900 ? 'none' : '';
     if (name === 'alerts') renderAlerts();
     if (name === 'stops') renderStops();
-    if (name === 'profile') renderProfiles();
+    if (name === 'profile') { renderProfiles(); renderLayers(); }
     const was = app.sheet; app.sheet = name;
     if ((was === 'alerts') !== (name === 'alerts')) setTimeout(refreshAlertMarkers, 0);
   }
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => openSheet(null));
+  // phones: shrink a panel to just its title so the map behind can be seen. Tap the handle or title, or swipe down;
+  // tap or swipe up to bring it back
+  const setPeek = (sh, on) => { sh.classList.toggle('peek', on); };
+  document.querySelectorAll('.sheet').forEach(sh => {
+    const grab = sh.querySelector('.grab'), head = sh.querySelector('header'); if (!grab || !head) return;
+    let y0 = null;
+    [grab, head].forEach(el => {
+      el.addEventListener('click', e => { if (window.innerWidth >= 900 || e.target.closest('button, a, input, select, .tag')) return; setPeek(sh, !sh.classList.contains('peek')); });
+      el.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true });
+      el.addEventListener('touchend', e => { if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null; if (dy > 40) setPeek(sh, true); else if (dy < -40) setPeek(sh, false); }, { passive: true });
+    });
+  });
   document.querySelectorAll('.tab').forEach(t => t.onclick = () => { const k = t.dataset.tab; if (k === 'map') return openSheet(null);
     // tapping the tab that's already open closes its panel
     if (app.sheet && t.classList.contains('on')) return openSheet(null); if (k === 'plan') return openSheet(app.RES && !app.RES.error && app.sheet !== 'plan' ? 'route' : 'plan'); openSheet(k); });
   $('planBtn').onclick = () => openSheet(app.RES && !app.RES.error ? 'route' : 'plan');
   $('routeBack').onclick = () => openSheet('plan');
   $('fabAlerts').onclick = () => openSheet('alerts');
-  $('fabLayers').onclick = () => { renderLayers(); openSheet('layers'); };
-  $('fabReport').onclick = () => openReport();
+  $('alertReport').onclick = () => openReport();
   $('nReport').onclick = () => openReport();
   $('fabLocate').onclick = () => locate(true);
   $('vchip').onclick = () => openSheet('profile');
@@ -180,23 +191,49 @@
 
   // ---------- top search ----------
   const q = $('q'), sug = $('suggest'); let qT;
+  // ---- Home and Work: saved on this phone, shown when you tap "Where to?"
+  let savingFav = null; // 'home' | 'work' while picking an address for it
+  const favs = () => RR.store.get('favPlaces', {});
+  const FAV = { home: { label: 'Home', icon: 'home' }, work: { label: 'Work', icon: 'work' } };
+  function saveFav(k, pt) { const f = favs(); f[k] = { lat: pt.lat, lon: pt.lon, label: pt.label }; RR.store.set('favPlaces', f); toast(`${FAV[k].label} saved: ${pt.label}`); }
+  function sugRow(icon, html, fn, extra) { const d = document.createElement('div'); d.tabIndex = 0; d.innerHTML = RR.icon(icon) + `<span style="flex:1;min-width:0">${html}</span>` + (extra || ''); d.onmousedown = e => e.preventDefault(); d.onclick = e => fn(e); sug.appendChild(d); return d; }
+  function showFavs() {
+    const f = favs(); sug.innerHTML = '';
+    if (savingFav) {
+      const k = savingFav;
+      sugRow('locate', `<b>Use my current location</b><small style="display:block;color:var(--muted)">Save it as ${FAV[k].label.toLowerCase()}</small>`, () => { if (!app.ME) return toast('Waiting for your location… try again in a moment.'); saveFav(k, { ...app.ME, label: 'Pinned at my location' }); endFav(); });
+      sugRow('x', '<span style="color:var(--muted)">Cancel</span>', () => endFav());
+    } else {
+      for (const k of ['home', 'work']) {
+        const p = f[k];
+        const row = sugRow(FAV[k].icon, p ? `<b>${FAV[k].label}</b><small style="display:block;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.label)}</small>` : `<b>Set ${FAV[k].label.toLowerCase()}</b><small style="display:block;color:var(--muted)">Tap to save an address</small>`,
+          e => { if (e.target.closest('[data-favedit]') || !p) return startFav(k); sug.classList.remove('on'); q.blur(); goTo({ lat: p.lat, lon: p.lon, label: p.label === 'Pinned at my location' ? FAV[k].label : `${FAV[k].label} (${p.label})` }); },
+          p ? `<button class="iconbtn" data-favedit aria-label="Change ${FAV[k].label.toLowerCase()}" style="width:34px;height:34px">${RR.icon('edit')}</button>` : '');
+      }
+      RR.places.recents().slice(0, 4).forEach(p => sugRow('pin', esc(p.label), () => { sug.classList.remove('on'); q.blur(); goTo(p); }));
+    }
+    sug.classList.add('on');
+  }
+  function startFav(k) { savingFav = k; q.value = ''; q.placeholder = `Search for your ${FAV[k].label.toLowerCase()} address`; q.focus(); showFavs(); }
+  function endFav() { savingFav = null; q.value = ''; q.placeholder = 'Where to?'; sug.classList.remove('on'); q.blur(); }
+  q.addEventListener('focus', () => { if (q.value.trim().length < 3) showFavs(); });
   q.addEventListener('input', () => {
-    clearTimeout(qT); const t = q.value.trim(); if (t.length < 3) { sug.classList.remove('on'); return; }
+    clearTimeout(qT); const t = q.value.trim(); if (t.length < 3) { showFavs(); return; }
     qT = setTimeout(async () => {
       let items = [];
       try { items = RR.google.ok() ? await RR.google.suggest(t) : (await RR.geocode(t)).map(x => ({ label: x.label, resolve: async () => x })); } catch { }
       if (q.value.trim() !== t) return;
-      sug.innerHTML = ''; items.forEach(x => { const d = document.createElement('div'); d.tabIndex = 0; d.innerHTML = RR.icon('pin') + `<span>${esc(x.label)}</span>`; d.onclick = async () => { sug.classList.remove('on'); q.value = ''; q.blur(); const pt = await x.resolve(); goTo(pt); }; sug.appendChild(d); });
+      sug.innerHTML = ''; items.forEach(x => { const d = document.createElement('div'); d.tabIndex = 0; d.innerHTML = RR.icon('pin') + `<span>${esc(x.label)}</span>`; d.onclick = async () => { sug.classList.remove('on'); const k = savingFav; q.value = ''; const pt = await x.resolve(); if (k) { if (pt) saveFav(k, pt); endFav(); return; } q.blur(); goTo(pt); }; sug.appendChild(d); });
       sug.classList.toggle('on', items.length > 0);
     }, 280);
   });
-  q.addEventListener('keydown', async e => { if (e.key === 'Enter') { e.preventDefault(); const r = await RR.geocode(q.value.trim()).catch(() => []); if (r[0]) { sug.classList.remove('on'); q.value = ''; q.blur(); goTo(r[0]); } else toast('No match in WA.'); } });
-  q.addEventListener('blur', () => setTimeout(() => sug.classList.remove('on'), 200));
+  q.addEventListener('keydown', async e => { if (e.key === 'Enter') { e.preventDefault(); const r = await RR.geocode(q.value.trim()).catch(() => []); if (r[0]) { sug.classList.remove('on'); q.value = ''; if (savingFav) { saveFav(savingFav, r[0]); return endFav(); } q.blur(); goTo(r[0]); } else toast('No match in WA.'); } });
+  q.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== q) { sug.classList.remove('on'); if (savingFav && !q.value.trim()) { savingFav = null; q.placeholder = 'Where to?'; } } }, 200));
   function goTo(pt) {
     setPoint('to', pt); RR.map.get().setView([pt.lat, pt.lon], 11);
     if (!app.P.from && app.ME) setPoint('from', { ...app.ME });
     openSheet('plan');
-    if (app.P.from && S.base) $('go').click(); else toast(app.P.from ? 'Loading road network…' : 'Set your start point to plan the route.');
+    if (app.P.from && (S.base || isCar())) $('go').click(); else toast(app.P.from ? 'Loading road network…' : 'Set your start point to plan the route.');
   }
 
   // ---------- planning ----------
@@ -395,7 +432,7 @@
     $('alertNote').innerHTML = (app.liveFailed && app.liveAt ? `<b>No signal:</b> showing alerts from ${when(app.liveAt)}. They'll refresh when signal returns.<br>` : '') + 'Closures, incidents, flooding and roadworks are live from the Main Roads WA Travel Map. Low bridges, height and weight limits come from Main Roads structure and network data for your vehicle. For bushfire and emergency warnings check <a href="https://www.emergency.wa.gov.au" target="_blank" rel="noopener">Emergency WA</a>.';
     $('alertScope').querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { app.alertScope = b.dataset.sc; renderAlerts(); });
     $('alertCats').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { app.alertCat = b.dataset.cat; renderAlerts(); });
-    $('alertList').querySelectorAll('[data-k]').forEach(li => li.onclick = () => { const a = shown[+li.dataset.k]; RR.map.get().setView([a.at[1], a.at[0]], 13); if (window.innerWidth < 900) openSheet(null); if (a.cat === 'report') reportPopup(a); });
+    $('alertList').querySelectorAll('[data-k]').forEach(li => li.onclick = () => { const a = shown[+li.dataset.k]; RR.map.get().setView([a.at[1], a.at[0]], 13); if (window.innerWidth < 900) setPeek($('sheet-alerts'), true); if (a.cat === 'report') reportPopup(a); });
   }
   // which hazards appear on the map:
   //  - Alerts screen open: exactly what the list shows
@@ -502,7 +539,7 @@
   // ---------- appearance ----------
   function paintTheme() {
     const m = RR.theme.mode(), cur = RR.theme.current();
-    ['themeSeg', 'themeSeg2'].forEach(id => $(id).querySelectorAll('[data-theme]').forEach(b => { b.classList.toggle('on', b.dataset.theme === m); b.onclick = () => { RR.theme.set(b.dataset.theme); paintTheme(); }; }));
+    ['themeSeg2'].forEach(id => $(id).querySelectorAll('[data-theme]').forEach(b => { b.classList.toggle('on', b.dataset.theme === m); b.onclick = () => { RR.theme.set(b.dataset.theme); paintTheme(); }; }));
     $('themeHint').textContent = m === 'auto' ? `Auto: ${cur} now. Switches to dark at dusk and light at dawn where you are.` : `Always ${m}.`;
   }
   RR.on('theme', () => { paintTheme(); });
