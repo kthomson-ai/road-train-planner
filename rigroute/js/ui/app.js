@@ -11,17 +11,25 @@
   window.RRapp = app; // debugging/tests
 
   // ---------- facility categories ----------
+  // stop types: m says who sees them (t = trucks, c = cars); g is the Google search, or a function of car mode
   const FAC = [
-    { key: 'diesel', label: 'Diesel', icon: 'fuel', mr: f => f.tags.includes('diesel'), g: 'diesel fuel truck stop' },
-    { key: 'parking', label: 'Truck parking', icon: 'parking', mr: f => f.tags.includes('parking') },
-    { key: 'rest', label: 'Rest areas', icon: 'rest', mr: f => f.tags.includes('rest') },
-    { key: 'weighbridge', label: 'Weighbridges', icon: 'scale', g: 'weighbridge' },
-    { key: 'roadhouse', label: 'Roadhouses', icon: 'food', mr: f => f.kind === 'roadhouse', g: 'roadhouse' },
-    { key: 'showers', label: 'Showers', icon: 'shower', g: 'truck stop showers' },
-    { key: 'food', label: 'Food', icon: 'food', mr: f => f.tags.includes('food'), g: 'roadhouse cafe' },
-    { key: 'mechanical', label: 'Mechanical', icon: 'wrench', g: 'truck repairs mechanic' },
-    { key: 'wash', label: 'Truck wash', icon: 'wash', g: 'truck wash' }
+    { key: 'diesel', m: 't', label: 'Diesel', icon: 'fuel', mr: f => f.tags.includes('diesel'), g: 'diesel fuel truck stop' },
+    { key: 'fuel', m: 'c', label: 'Fuel', icon: 'fuel', mr: f => f.kind === 'roadhouse', g: 'petrol station' },
+    { key: 'ev', m: 'c', label: 'EV charging', icon: 'bolt', g: 'electric vehicle charging station' },
+    { key: 'parking', m: 't', label: 'Truck parking', icon: 'parking', mr: f => f.tags.includes('parking') },
+    { key: 'carpark', m: 'c', label: 'Parking', icon: 'parking', g: 'car park' },
+    { key: 'rest', m: 'tc', label: 'Rest areas', icon: 'rest', mr: f => f.tags.includes('rest') },
+    { key: 'toilets', m: 'tc', label: 'Toilets', icon: 'toilet', mr: f => f.tags.includes('toilets'), g: 'public toilets' },
+    { key: 'weighbridge', m: 't', label: 'Weighbridges', icon: 'scale', g: 'weighbridge' },
+    { key: 'roadhouse', m: 'tc', label: 'Roadhouses', icon: 'food', mr: f => f.kind === 'roadhouse', g: 'roadhouse' },
+    { key: 'showers', m: 't', label: 'Showers', icon: 'shower', g: 'truck stop showers' },
+    { key: 'food', m: 'tc', label: 'Food', icon: 'food', mr: f => f.tags.includes('food'), g: car => car ? 'cafe restaurant takeaway' : 'roadhouse cafe' },
+    { key: 'mechanical', m: 'tc', label: 'Mechanical', icon: 'wrench', g: car => car ? 'car mechanic auto repairs' : 'truck repairs mechanic' },
+    { key: 'wash', m: 't', label: 'Truck wash', icon: 'wash', g: 'truck wash' }
   ];
+  const isCar = () => RR.car.is(app.PROF || RR.vehicles.active());
+  const facFor = () => { const c = isCar() ? 'c' : 't'; return FAC.filter(x => x.m.includes(c)); };
+  const SWAP_CAT = { diesel: 'fuel', fuel: 'diesel', parking: 'carpark', carpark: 'parking' };
   RR.facIcon = f => f.kind === 'rtaa' ? 'truck' : f.kind === 'hvrest' ? 'parking' : f.kind === 'rest' ? 'rest' : f.kind === 'roadhouse' ? 'food' : (FAC.find(c => c.key === f.cat) || {}).icon || 'pin';
 
   // ---------- sheets & tabs ----------
@@ -436,24 +444,26 @@
     const r = app.RES && !app.RES.error ? app.RES.routes[app.sel] : null;
     if (!r && app.stopScope === 'route') app.stopScope = 'near';
     $('stopScope').innerHTML = [['route', 'Along my route', !r], ['near', 'Near me / map']].map(([k, l, dis]) => `<button class="chip ${app.stopScope === k ? 'on' : ''}" data-sc="${k}" ${dis ? 'disabled style="opacity:.4"' : ''}>${l}</button>`).join('');
-    $('stopCats').innerHTML = FAC.map(c => `<button class="chip ${app.stopCat === c.key ? 'on' : ''}" data-cat="${c.key}">${RR.icon(c.icon)}${c.label}</button>`).join('');
+    const cats = facFor(), car = isCar();
+    if (app.stopCat && !cats.some(c => c.key === app.stopCat)) app.stopCat = cats.some(c => c.key === SWAP_CAT[app.stopCat]) ? SWAP_CAT[app.stopCat] : null;
+    $('stopCats').innerHTML = cats.map(c => `<button class="chip ${app.stopCat === c.key ? 'on' : ''}" data-cat="${c.key}">${RR.icon(c.icon)}${c.label}</button>`).join('');
     $('stopScope').querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { app.stopScope = b.dataset.sc; renderStops(); });
     $('stopCats').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { app.stopCat = app.stopCat === b.dataset.cat ? null : b.dataset.cat; renderStops(); });
-    const cat = FAC.find(c => c.key === app.stopCat);
+    const cat = cats.find(c => c.key === app.stopCat), gq = cat && (typeof cat.g === 'function' ? cat.g(car) : cat.g);
     if (!cat) { RR.map.setFacilities([], () => { }); $('stopList').innerHTML = '<li><span class="tx"><b>Nothing shown on the map</b><small>Tap a type above to show it. Tap it again to clear it from the map.</small></span></li>'; $('stopNote').textContent = ''; return; }
     const centre = app.ME && app.stopScope === 'near' ? [app.ME.lon, app.ME.lat] : (() => { const m = RR.map.get().getCenter(); return [m.lng, m.lat]; })();
     const along = r && app.stopScope === 'route' ? alongIdx(r) : null;
     const place = f => { if (along) { const d = along(f.at); return d == null ? null : { ...f, along: d }; } const d = RAV.hav(centre, f.at); return d < 150000 ? { ...f, dist: d } : null; };
     let items = cat.mr ? S.facilities.filter(cat.mr).map(place).filter(Boolean) : [];
     $('stopList').innerHTML = '<li><span class="tx"><b>Searching…</b></span></li>';
-    if (cat.g && RR.google.ok()) {
+    if (gq && RR.google.ok()) {
       const probes = along ? sampleLine(r.line, 6) : [centre];
-      for (const p of probes) { const k = cat.key + p.map(v => v.toFixed(2)).join(); if (!gCache.has(k)) gCache.set(k, RR.google.nearby(cat.g, p, 50, 10).catch(() => [])); const got = await gCache.get(k); got.forEach(g => { const x = place({ ...g, cat: cat.key, kind: 'g', tags: [] }); if (x && !items.some(i => RAV.hav(i.at, x.at) < 150)) items.push(x); }); }
+      for (const p of probes) { const k = cat.key + p.map(v => v.toFixed(2)).join(); if (!gCache.has(k)) gCache.set(k, RR.google.nearby(gq, p, 50, 10).catch(() => [])); const got = await gCache.get(k); got.forEach(g => { const x = place({ ...g, cat: cat.key, kind: 'g', tags: [] }); if (x && !items.some(i => RAV.hav(i.at, x.at) < 150)) items.push(x); }); }
     }
     if (app.stopCat !== cat.key) return;
     items.sort((a, b) => (a.along ?? a.dist) - (b.along ?? b.dist));
     $('stopList').innerHTML = items.length ? items.slice(0, 60).map((f, k) => `<li data-k="${k}"><span class="ico lime">${RR.icon(RR.facIcon(f))}</span><span class="tx"><b>${esc(f.name)}</b><small>${esc(f.address || ({ rtaa: 'Road train assembly area', hvrest: 'Heavy vehicle rest area', rest: 'Rest area', roadhouse: 'Roadhouse' }[f.kind] || ''))}${tagTxt(f, ['rest', 'parking', 'roadhouse', 'diesel', 'food'])}</small><small style="color:var(--dim)">${esc(f.source)}</small></span><span class="km">${fmtKm(f.along ?? f.dist)}</span></li>`).join('') : `<li><span class="tx"><b>No ${cat.label.toLowerCase()} found</b><small>${cat.g && !RR.google.ok() ? 'Google Places isn\'t available right now.' : 'Try the other scope or move the map.'}</small></span></li>`;
-    $('stopNote').textContent = (cat.mr ? 'Rest areas, roadhouses and assembly areas: Main Roads WA. ' : '') + (cat.g ? 'Businesses: Google Places, so check opening hours and truck access before relying on them.' : '');
+    $('stopNote').textContent = (cat.mr ? 'Rest areas, roadhouses and assembly areas: Main Roads WA. ' : '') + (gq ? (car ? 'Businesses: Google Places, so check opening hours before relying on them.' : 'Businesses: Google Places, so check opening hours and truck access before relying on them.') : '');
     RR.map.setFacilities(items.slice(0, 60), f => RR.map.get().setView([f.at[1], f.at[0]], 14));
     $('stopList').querySelectorAll('[data-k]').forEach(li => li.onclick = () => { const f = items[+li.dataset.k]; RR.map.get().setView([f.at[1], f.at[0]], 14); if (window.innerWidth < 900) openSheet(null); });
   }
@@ -499,15 +509,14 @@
 
   // ---------- voice ----------
   function paintVoices() {
-    let vs = []; try { vs = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); } catch { }
+    let vs = []; try { vs = NAV.goodVoices(speechSynthesis.getVoices()); } catch { }
     const pref = (RR.store.get('voicePrefRR', null) || {});
     const sel = $('setVoiceName');
     if (!vs.length) { sel.innerHTML = '<option>Default voice</option>'; sel.disabled = true; return; }
-    const rank = v => (/en-AU/i.test(v.lang) ? 0 : /en-GB/i.test(v.lang) ? 1 : /en-NZ|en-IE/i.test(v.lang) ? 2 : 3);
-    vs.sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name));
     const region = l => ({ 'en-AU': 'Australian', 'en-GB': 'British', 'en-US': 'American', 'en-NZ': 'New Zealand', 'en-IE': 'Irish', 'en-IN': 'Indian', 'en-ZA': 'South African' }[l.replace('_', '-')] || l);
     sel.disabled = false;
-    sel.innerHTML = '<option value="">Automatic (Australian if available)</option>' + vs.map(v => `<option value="${esc(v.voiceURI)}">${esc(v.name.replace(/^(Microsoft|Google)\s+/, ''))} · ${region(v.lang)}${v.localService ? ' · works offline' : ''}</option>`).join('');
+    sel.innerHTML = '<option value="">Automatic (best Australian voice)</option>' + vs.map(v => `<option value="${esc(v.voiceURI)}">${NAV.vScore(v) <= 2 ? '★ ' : ''}${esc(v.name.replace(/^(Microsoft|Google)\s+/, ''))} · ${region(v.lang)}${v.localService ? ' · works offline' : ''}</option>`).join('');
+    $('voiceTip').hidden = vs.some(v => NAV.vScore(v) <= 1);
     sel.value = pref.uri || '';
     $('setRate').value = pref.rate || 1; $('setRateVal').textContent = (+$('setRate').value).toFixed(2).replace(/0$/, '') + '×';
   }
@@ -593,7 +602,12 @@
 
   // ---------- add a stop while driving ----------
   RR.on('stopreached', n => { app.reached = Math.max(app.reached || 0, n); });
-  const AS_CATS = [
+  const asCats = () => isCar() ? [
+    { key: 'diesel', label: 'Fuel', icon: 'fuel', mr: f => f.kind === 'roadhouse', g: 'petrol station', say: 'fuel' },
+    { key: 'toilet', label: 'Toilets / rest', icon: 'toilet', mr: f => f.tags.includes('toilets') || f.kind === 'rest' || f.kind === 'roadhouse', g: 'public toilets', say: 'toilet stop' },
+    { key: 'food', label: 'Food', icon: 'food', mr: f => f.kind === 'roadhouse' || f.tags.includes('food'), g: 'cafe restaurant takeaway', say: 'food stop' },
+    { key: 'parking', label: 'Parking', icon: 'parking', mr: () => false, g: 'car park', say: 'parking' }
+  ] : [
     { key: 'diesel', label: 'Diesel', icon: 'fuel', mr: f => f.tags.includes('diesel') || f.kind === 'roadhouse', g: 'diesel truck stop', say: 'diesel' },
     { key: 'toilet', label: 'Toilets / rest', icon: 'rest', mr: f => f.tags.includes('toilets') || f.kind === 'hvrest' || f.kind === 'roadhouse', say: 'toilet stop' },
     { key: 'food', label: 'Food', icon: 'food', mr: f => f.kind === 'roadhouse' || f.tags.includes('food'), g: 'roadhouse cafe', say: 'food stop' },
@@ -610,7 +624,7 @@
   function offRoute(r, p) { const L = r.line, st = Math.max(1, Math.floor(L.length / 2000)); let b = 1e12; for (let i = 0; i < L.length; i += st) b = Math.min(b, RAV.hav(p, L[i])); return b; }
   async function findAhead(catKey) {
     const h = hereOnRoute(); if (!h) return [];
-    const cat = AS_CATS.find(c => c.key === catKey);
+    const cat = asCats().find(c => c.key === catKey);
     let items = S.facilities.filter(cat.mr).map(f => ({ ...f, src: 'mr' }));
     if (cat.g && RR.google.ok()) {
       const ahead = h.r.line.filter((p, i) => i % Math.max(1, Math.floor(h.r.line.length / 400)) === 0).filter(p => { const d = h.near(p); return d != null && d > h.here && d < h.here + 300000; });
@@ -622,7 +636,7 @@
   }
   async function openAddStop(catKey) {
     if (catKey) asCat = catKey;
-    $('asCats').innerHTML = AS_CATS.map(c => `<button class="chip ${c.key === asCat ? 'on' : ''}" data-c="${c.key}">${RR.icon(c.icon)}${c.label}</button>`).join('');
+    $('asCats').innerHTML = asCats().map(c => `<button class="chip ${c.key === asCat ? 'on' : ''}" data-c="${c.key}">${RR.icon(c.icon)}${c.label}</button>`).join('');
     $('asCats').querySelectorAll('[data-c]').forEach(b => b.onclick = () => openAddStop(b.dataset.c));
     $('asList').innerHTML = '<li><span class="tx"><b>Looking ahead on your route…</b></span></li>';
     $('asNote').textContent = 'Places within 5 km of your route, ahead of you. Main Roads rest areas and roadhouses; diesel and food also from Google listings (check truck access).';
@@ -708,7 +722,7 @@
       if (cmd.kind === 'report') { await sendReport(cmd.type, cmd.detail, cmd.side); const T = RR.reports.type(cmd.type); NAV._say(`${T.label}${cmd.detail ? ', ' + cmd.detail : ''} reported. Thanks.`); return; }
       if (cmd.kind === 'stop') {
         if (!NAV.isActive()) { openAddStop(cmd.cat); return; }
-        const list = await findAhead(cmd.cat); const cat = AS_CATS.find(c => c.key === cmd.cat);
+        const list = await findAhead(cmd.cat); const cat = asCats().find(c => c.key === cmd.cat);
         if (!list.length) { NAV._say(`I couldn't find a ${cat.say} ahead on your route.`); return openAddStop(cmd.cat); }
         const best = list.find(f => f.off < 2000) || list[0];
         insertStop(best);

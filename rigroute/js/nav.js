@@ -10,7 +10,14 @@ const NAV = (() => {
   let muted = false, voice = null;
   let prefURI = null, rate = 1;
   try { const v = JSON.parse(localStorage.getItem('rr.voicePref') || 'null'); if (v) { prefURI = v.uri || null; rate = +v.rate || 1; } } catch { }
-  function pickVoice() { try { const all = speechSynthesis.getVoices(); const off = !navigator.onLine; const vs = off && all.some(v => v.localService && /^en/i.test(v.lang)) ? all.filter(v => v.localService) : all; voice = (prefURI && vs.find(v => v.voiceURI === prefURI)) || vs.find(v => /en-AU/i.test(v.lang)) || vs.find(v => /en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; } catch { } }
+  // voice quality: the phone's "Premium"/"Enhanced"/neural voices sound natural; Apple's novelty voices
+  // (Zarvox, Bubbles…) and the old Eloquence set (Fred, Grandpa, Rocko…) sound robotic, so they're dropped or sunk
+  const NOVELTY = /^(albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|deranged|hysterical|pipe organ)\b/i;
+  const ELOQ = /^(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley|fred|junior|kathy|ralph)\b/i;
+  const vScore = v => NOVELTY.test(v.name) ? 99 : /premium|natural|neural|siri/i.test(v.name) ? 0 : /enhanced/i.test(v.name) ? 1 : (!v.localService && /google|online/i.test(v.name)) ? 2 : ELOQ.test(v.name) ? 8 : 4;
+  const vRegion = v => /en-AU/i.test(v.lang) ? 0 : /en-GB|en-NZ|en-IE/i.test(v.lang) ? 1 : 2;
+  const goodVoices = all => all.filter(v => /^en/i.test(v.lang) && !NOVELTY.test(v.name)).sort((a, b) => vScore(a) - vScore(b) || vRegion(a) - vRegion(b) || a.name.localeCompare(b.name));
+  function pickVoice() { try { const all = speechSynthesis.getVoices(); const off = !navigator.onLine; const vs = off && all.some(v => v.localService && /^en/i.test(v.lang)) ? all.filter(v => v.localService) : all; const best = goodVoices(vs); const au = best.find(v => vRegion(v) === 0 && vScore(v) <= 2); voice = (prefURI && vs.find(v => v.voiceURI === prefURI)) || au || best[0] || null; } catch { } }
   function setVoice(uri, r) { prefURI = uri || null; if (r) rate = +r; try { localStorage.setItem('rr.voicePref', JSON.stringify({ uri: prefURI, rate })); } catch { } pickVoice(); }
   try { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; addEventListener('online', pickVoice); addEventListener('offline', pickVoice); } catch { }
   const lc1 = t => t.charAt(0).toLowerCase() + t.slice(1);
@@ -220,7 +227,7 @@ const NAV = (() => {
     if (!active) { rerouting = false; return; }
     rerouting = false; offCount = 0;
     if (r && !r.error) { prepare(r); opts.drawRoute(r); say(`New route. ${fmtKm(r.total).replace('km', 'kilometres')} to go.`); }
-    else if (opts.car) { retryAt = Date.now() + 30000; say('I couldn\'t get a new route. Head back to the route when you can.'); flash('No new route yet (no signal?). Return to the lime line; I\'ll try again.'); }
+    else if (opts.car) { retryAt = Date.now() + 30000; say('I couldn\'t get a new route. Head back to the route when you can.'); flash('No new route yet (no signal?). Return to the blue line; I\'ll try again.'); }
     else { say('Could not find a legal route from here. Head back to the approved route.'); flash('No legal route from here. Return to the approved route (lime line).'); }
   }
 
@@ -257,7 +264,7 @@ const NAV = (() => {
     const ang = Math.atan2(a[1] - b[1], a[0] - b[0]); const tip = [a[0] + 9 * Math.cos(ang), a[1] + 9 * Math.sin(ang)];
     const w1 = [a[0] + 11 * Math.cos(ang + 2.2), a[1] + 11 * Math.sin(ang + 2.2)], w2 = [a[0] + 11 * Math.cos(ang - 2.2), a[1] + 11 * Math.sin(ang - 2.2)];
     const full = path(inPts.concat(outPts.slice(1)));
-    return `<rect x="-70" y="-70" width="140" height="140" style="fill:var(--surface)"/>${side}<path d="${full}" stroke="#101418" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${full}" stroke="#B7F23D" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polygon points="${[tip, w1, w2].map(p => p.map(v => v.toFixed(1)).join(',')).join(' ')}" fill="#B7F23D" stroke="#101418" stroke-width="2"/><circle cx="0" cy="${(170 * S * 0.9).toFixed(0)}" r="0"/>`;
+    return `<rect x="-70" y="-70" width="140" height="140" style="fill:var(--surface)"/>${side}<path d="${full}" stroke="#101418" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${full}" stroke="${opts.car ? '#2F80FF' : '#B7F23D'}" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polygon points="${[tip, w1, w2].map(p => p.map(v => v.toFixed(1)).join(',')).join(' ')}" fill="${opts.car ? '#2F80FF' : '#B7F23D'}" stroke="#101418" stroke-width="2"/><circle cx="0" cy="${(170 * S * 0.9).toFixed(0)}" r="0"/>`;
   }
 
   async function keepAwake() { try { if ('wakeLock' in navigator) { lock = await navigator.wakeLock.request('screen'); } } catch { } }
@@ -317,7 +324,7 @@ const NAV = (() => {
   function stop() { cam3d(false); active = false; stopTracking(); try { speechSynthesis.cancel(); } catch { } try { lock && lock.release(); } catch { } lock = null; document.body.classList.remove('driving'); if (posMarker) map.removeLayer(posMarker); }
   function setMuted(m) { muted = m; if (m) try { speechSynthesis.cancel(); } catch { } }
   // test hook
-  return { start, stop, setMuted, setVoice, refresh, zoomBy, setView3d, setMarker, marker: () => markerKind, view3d: () => view3d, is3d: () => cam3dOn && view3d, turning: () => cam3dOn, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say };
+  return { start, stop, setMuted, setVoice, refresh, zoomBy, setView3d, setMarker, marker: () => markerKind, view3d: () => view3d, is3d: () => cam3dOn && view3d, turning: () => cam3dOn, along: () => lastAlong, isActive: () => active, _fix: onFix, _speakName: speakName, _say: say, goodVoices, vScore };
 })();
 
 // ---- voice input for address boxes ----

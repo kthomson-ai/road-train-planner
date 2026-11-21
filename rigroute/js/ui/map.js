@@ -76,11 +76,13 @@ RR.map = (() => {
   let routeClick = null;
   function drawRoutes(routes, sel, onSelect) {
     L_.routes.clearLayers(); routeClick = onSelect;
-    routes.forEach((r, i) => { if (i === sel) return; const ll = r.line.map(c => [c[1], c[0]]); L.polyline(ll, { color: '#101418', weight: 9, opacity: 0.85 }).addTo(L_.routes); L.polyline(ll, { color: '#36A5F5', weight: 5, opacity: 0.85 }).addTo(L_.routes).on('click', () => routeClick && routeClick(i)).bindTooltip(`${r.label}`, { sticky: true }); });
+    const car = RR.car && RR.vehicles && RR.car.is(RR.vehicles.active()); // cars: blue route, grey alternatives; trucks: lime route, blue alternatives
+    const mainCol = car ? '#2F80FF' : '#B7F23D', altCol = car ? '#8C98A6' : '#36A5F5';
+    routes.forEach((r, i) => { if (i === sel) return; const ll = r.line.map(c => [c[1], c[0]]); L.polyline(ll, { color: '#101418', weight: 9, opacity: 0.85 }).addTo(L_.routes); L.polyline(ll, { color: altCol, weight: 5, opacity: 0.85 }).addTo(L_.routes).on('click', () => routeClick && routeClick(i)).bindTooltip(`${r.label}`, { sticky: true }); });
     const r = routes[sel]; if (!r) return;
     const ll = r.line.map(c => [c[1], c[0]]);
     L.polyline(ll, { color: '#101418', weight: 11, opacity: 0.95 }).addTo(L_.routes);
-    const main = L.polyline(ll, { color: '#B7F23D', weight: 6 }).addTo(L_.routes);
+    const main = L.polyline(ll, { color: mainCol, weight: 6 }).addTo(L_.routes);
     (r.conf ? r.conf.parts : []).forEach(p => {
       if (p.cls === 'conditional') L.polyline(p.pts.map(c => [c[1], c[0]]), { color: '#FFB020', weight: 4, dashArray: '2 8', opacity: 0.95 }).addTo(L_.routes);
       else if (p.cls === 'unverified') L.polyline(p.pts.map(c => [c[1], c[0]]), { color: '#F04444', weight: 5, dashArray: '6 8', opacity: 0.95 }).addTo(L_.routes).bindTooltip('Local road, not on the approved network for this vehicle: check access');

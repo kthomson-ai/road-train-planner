@@ -35,6 +35,8 @@ RR.ICONS = {
   rest: '<path d="M4 18V9a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v9M4 14h16M7 18v2M17 18v2"/>',
   parking: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/>',
   food: '<path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M17 3c-2 2-2 6 0 8v10"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>',
+  toilet: '<circle cx="7" cy="4.5" r="1.8"/><circle cx="17" cy="4.5" r="1.8"/><path d="M5 9h4l1 6H9v6H5v-6H4l1-6ZM15 9h4l2 7h-3v5h-2v-5h-3l2-7Z"/>',
   wrench: '<path d="M14.5 6a4 4 0 0 0 5 5l-9 9a2.1 2.1 0 0 1-3-3l9-9a4 4 0 0 0-2-2Z"/>',
   shower: '<path d="M5 21V8a4 4 0 0 1 8 0M9 8h8M10 12v.01M13 12v.01M16 12v.01M11 15v.01M14 15v.01M17 15v.01"/>',
   wash: '<path d="M3 15h18l-2-6H5l-2 6ZM6 19v-4M18 19v-4M8 5c0 1 1 1 1 2M12 4c0 1 1 1 1 2M16 5c0 1 1 1 1 2"/>',

@@ -9,22 +9,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="img/favicon-64.png?v=30">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=30">
+<link rel="icon" href="img/favicon-64.png?v=31">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=31">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="js/vendor/leaflet.css">
-<link rel="stylesheet" href="css/rigroute.css?v=30">
+<link rel="stylesheet" href="css/rigroute.css?v=31">
 </head>
 <body>
-<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=30" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
+<div class="splash" id="splash"><div class="in"><img src="img/logo-pin.png?v=31" alt=""><h1>Rig<span>Route</span></h1><p>Smarter routes for heavier vehicles.</p><div class="bar"><i></i></div></div></div>
 
 <div id="map" aria-label="Map"></div>
 
 <!-- top: search + vehicle -->
 <div class="topbar">
   <div class="search">
-    <img src="img/logo-mark.png?v=30" alt="RigRoute">
+    <img src="img/logo-mark.png?v=31" alt="RigRoute">
     <input id="q" type="search" placeholder="Where to?" autocomplete="off" enterkeyhint="search" aria-label="Search destination">
     <button class="vchip" id="vchip" aria-label="Change vehicle"><span class="vi" data-icon="truck"></span><div><b id="vchipName">Vehicle</b><small id="vchipSub"></small></div></button>
   </div>
@@ -105,9 +105,9 @@
   </div>
 </section>
 
-<section class="sheet half" id="sheet-stops" aria-label="Truck stops">
+<section class="sheet half" id="sheet-stops" aria-label="Stops">
   <div class="grab"></div>
-  <header><h2>Truck stops</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
+  <header><h2>Stops</h2><button class="iconbtn" data-close aria-label="Close"><span data-icon="x"></span></button></header>
   <div class="body">
     <div class="chips" id="stopScope" style="margin-bottom:10px"></div>
     <div class="chips" id="stopCats" style="margin-bottom:12px"></div>
@@ -220,7 +220,7 @@
     <div class="card" style="margin-top:16px">
       <h3>Settings</h3>
       <label class="toggle"><span><b>Voice guidance</b><small>Spoken turns and warnings</small></span><span class="switch"><input type="checkbox" id="setVoice" checked><i></i></span></label>
-      <div class="field" style="margin-top:12px"><label for="setVoiceName">Voice</label><select class="inp" id="setVoiceName"></select></div>
+      <div class="field" style="margin-top:12px"><label for="setVoiceName">Voice</label><select class="inp" id="setVoiceName"></select><div class="hint">★ natural-sounding voices. Voices come from your phone.</div><div class="hint" id="voiceTip" hidden>For a more natural voice, download one on your phone, then reopen RigRoute. <b>iPhone:</b> Settings → Accessibility → Spoken Content → Voices → English, pick an Australian voice marked Enhanced or Premium. <b>Android:</b> Settings → Text-to-speech → Google Speech Services → Install voice data → English (Australia).</div></div>
       <div class="field"><label for="setRate">Speaking speed <span id="setRateVal">1.0×</span></label><input type="range" id="setRate" min="0.8" max="1.4" step="0.05" value="1" style="width:100%;accent-color:var(--lime)"></div>
       <label class="toggle"><span><b>Speeding alert</b><small>Speed turns red and the voice warns when you're over the limit</small></span><span class="switch"><input type="checkbox" id="setSpeedWarn" checked><i></i></span></label>
       <button class="btn block" id="setVoiceTest"><span data-icon="volume"></span>Test voice</button>
@@ -273,7 +273,7 @@
   <button class="tab on" data-tab="map"><span data-icon="map"></span>Map</button>
   <button class="tab" data-tab="plan"><span data-icon="route"></span>Plan Route</button>
   <button class="tab" data-tab="alerts"><span data-icon="alert"></span>Alerts<i class="dot" id="tabAlertDot" hidden></i></button>
-  <button class="tab" data-tab="stops"><span data-icon="fuel"></span>Truck Stops</button>
+  <button class="tab" data-tab="stops"><span data-icon="fuel"></span>Stops</button>
   <button class="tab" data-tab="profile"><span data-icon="truck"></span>Profile</button>
 </nav>
 
@@ -290,7 +290,7 @@
 <div id="netpill" hidden><span data-icon="alert"></span><span id="netText">No signal: navigation still works</span></div>
 <div id="disclaimer" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="dcTitle">
   <div class="mbox">
-    <img src="img/logo-pin.png?v=30" alt="" style="width:56px;height:56px">
+    <img src="img/logo-pin.png?v=31" alt="" style="width:56px;height:56px">
     <h2 id="dcTitle">Before you drive</h2>
     <p>RigRoute is a <b>planning aid</b>. It uses Main Roads WA network and live data, but data can be incomplete or out of date.</p>
     <ul>
@@ -308,24 +308,24 @@
 
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/Leaflet.GoogleMutant.js"></script>
-<script src="js/core.js?v=30"></script>
-<script src="js/nav.js?v=30"></script>
-<script src="js/services/config.js?v=30"></script>
-<script src="js/services/store.js?v=30"></script>
-<script src="js/services/mainroads.js?v=30"></script>
-<script src="js/services/google.js?v=30"></script>
-<script src="js/services/vehicles.js?v=30"></script>
-<script src="js/services/routing.js?v=30"></script>
-<script src="js/services/carroute.js?v=30"></script>
-<script src="js/services/speed.js?v=30"></script>
-<script src="js/services/trip.js?v=30"></script>
-<script src="js/services/shared.js?v=30"></script>
-<script src="js/services/places.js?v=30"></script>
-<script src="js/services/alerts.js?v=30"></script>
-<script src="js/services/reports.js?v=30"></script>
-<script src="js/ui/icons.js?v=30"></script>
-<script src="js/ui/theme.js?v=30"></script>
-<script src="js/ui/map.js?v=30"></script>
-<script src="js/ui/app.js?v=30"></script>
+<script src="js/core.js?v=31"></script>
+<script src="js/nav.js?v=31"></script>
+<script src="js/services/config.js?v=31"></script>
+<script src="js/services/store.js?v=31"></script>
+<script src="js/services/mainroads.js?v=31"></script>
+<script src="js/services/google.js?v=31"></script>
+<script src="js/services/vehicles.js?v=31"></script>
+<script src="js/services/routing.js?v=31"></script>
+<script src="js/services/carroute.js?v=31"></script>
+<script src="js/services/speed.js?v=31"></script>
+<script src="js/services/trip.js?v=31"></script>
+<script src="js/services/shared.js?v=31"></script>
+<script src="js/services/places.js?v=31"></script>
+<script src="js/services/alerts.js?v=31"></script>
+<script src="js/services/reports.js?v=31"></script>
+<script src="js/ui/icons.js?v=31"></script>
+<script src="js/ui/theme.js?v=31"></script>
+<script src="js/ui/map.js?v=31"></script>
+<script src="js/ui/app.js?v=31"></script>
 </body>
 </html>
